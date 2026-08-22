@@ -29,21 +29,27 @@ sent and hidden.
 
 ## Installation
 
-This ships as a workshop mod, not as a folder dropped into a server's Shine install. That is a
-hard requirement, not a preference: Shine loads a plugin's `client.lua` from the *client's own*
-filesystem, so clients must physically have these files. A server-only copy would give you a
-server-side plugin with no UI and no texture.
-
-1. Publish the repository contents as an NS2 workshop mod.
-2. Add the mod to the server's mod list. Clients download it automatically on connect.
-3. Shine discovers the extension by scanning the virtual filesystem for
-   `lua/shine/extensions/*.lua`, so there is no manifest to edit. It is enabled by default.
+This is a Shine extension and nothing else — the whole thing is
+`lua/shine/extensions/lifeformpicker/` plus one texture. There is no `lua/entry/` bootstrap, no
+`modEntry`, and no ModLoader file hook. Shine discovers it by scanning the virtual filesystem for
+`lua/shine/extensions/*.lua`, so there is no manifest to edit, and it is enabled by default.
 
 Enable or disable it like any Shine plugin:
 
 ```bash
 sh_loadplugin lifeformpicker
 ```
+
+### Getting the files to clients
+
+Like any Shine extension with a client-side component, the extension folder has to exist on the
+**clients** as well as the server: on connect the server sends `Shine_PluginSync`, and each client
+then loads `client.lua` from its own filesystem. A copy that only exists on the server gives you a
+working server-side plugin with no icons and no texture.
+
+In practice that means the extension folder and `ui/` need to travel in whatever mod the server
+has clients mount — the same requirement as any other client-facing Shine plugin. Dropping it into
+a server's local Shine directory alone is not enough.
 
 ## Compatibility
 
