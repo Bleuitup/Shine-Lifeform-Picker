@@ -11,3 +11,6 @@
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# NS2 Launch Pad build output
+output/

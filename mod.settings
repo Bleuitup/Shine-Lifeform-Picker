@@ -1,0 +1,52 @@
+name        = "[Shine] Lifeform Picker"
+source_dir  = "."
+output_dir  = "output"
+description = [=[mod id 3787803421
+
+[b]A Shine extension that lets aliens call their lifeform before the round starts.[/b]
+
+Open the scoreboard during the pre-round, click the lifeform icon on your own row, and pick what you intend to play. Your pick shows on the scoreboard for your team and for spectators.
+
+[b]It has no gameplay effect at all.[/b] Nothing is reserved, gated, or forced — you still evolve exactly as normal. It only replaces "who's going fade" in voice chat with something the whole team can read at a glance.
+
+[h1]How to use it[/h1]
+
+[list]
+[*] Join the alien team during the pre-round.
+[*] Hold the scoreboard key. Every alien has a lifeform icon on their row, defaulting to Skulk.
+[*] Click [b]your own[/b] icon. A menu opens at your cursor: Skulk, Gorge, Lerk, Fade, Onos.
+[*] Pick one. Every alien and spectator sees it immediately.
+[/list]
+
+The icons appear only before the round starts, and disappear the moment it begins. All picks are cleared for the next round.
+
+[h1]Who sees what[/h1]
+
+[list]
+[*] [b]Aliens[/b] — see all picks, can declare.
+[*] [b]Spectators[/b] — see all picks, cannot declare.
+[*] [b]Marines[/b] — see nothing. Picks are filtered on the server, so the data never reaches a marine's machine at all rather than being sent and merely hidden.
+[/list]
+
+[h1]Requirements[/h1]
+
+[list]
+[*] Requires [b]Shine[/b]. It installs as a normal Shine extension and is enabled by default; toggle it with [i]sh_loadplugin lifeformpicker[/i].
+[*] Must be run on the server. Clients need the mod too, since the icons and the pick menu are client-side.
+[/list]
+
+[h1]Compatibility[/h1]
+
+Works alongside scoreboard mods such as Shimizu Scoreboard. Most of them claim lua/GUIScoreboard.lua outright; this one never touches the file, and instead patches the scoreboard's methods at runtime, so it layers on top instead of competing.
+
+Note that Shimizu Scoreboard has a lifeform selector of its own. Running both gives you two sets of icons — pick one.
+
+[h1]Credits[/h1]
+
+The idea, and the click-your-icon-for-a-menu interaction, come from Hatta's discontinued [i]Shine - Lifeform Selector[/i]. The lifeform artwork is from Shimizu Scoreboard. This is an independent implementation rather than a fork of either.
+
+Source: https://github.com/Bleuitup/Shine-Lifeform-Picker]=]
+image       = "preview.jpg"
+tag_modtype = "Look and Feel"
+tag_support = "Must be run on Server"
+publish_id = 3787803421
