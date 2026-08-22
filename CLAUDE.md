@@ -25,7 +25,7 @@ alternatives is that it is small enough to read in one sitting.
 
 ## Two constraints that decide the architecture
 
-**1. It ships as a workshop mod, not a server-side folder drop.** Shine loads a plugin's
+**1. The files must reach clients, not just the server.** Shine loads a plugin's
 `client.lua` from the *client's* filesystem (`Shine_PluginSync` tells the client to
 `EnableExtension`, which then loads the file locally). A server-only install yields a server
 plugin with no UI and no texture. There is intentionally **no `lua/entry/*.entry`** — mod content
@@ -51,9 +51,15 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   field by design.
 - **Marines are filtered server-side**, per-client rather than broadcast. Client-side hiding would
   still put the data on their machine.
-- **Icons are flat `Color(1,1,1,1)`.** No tint, no declared-vs-default distinction. This was an
-  explicit product decision, not an oversight.
-- **Prowler is excluded** even though it is row 5 of the atlas.
+- **One flat icon colour, no declared-vs-default distinction.** An explicit product decision, not
+  an oversight. `kIconColour` is RGB 255,225,187 — the cream of Hatta's *Lifeform Selector*, which
+  never tinted anything (it applied a no-op `Color(1,1,1,1)`) and simply inherited the baked
+  colour of the vanilla `ui/alien_hivestatus_commicons.dds` it drew from. Our source art is pure
+  white, so `SetColor` reproduces that hue exactly and any other is a one-line change.
+- **Prowler is excluded.** The atlas was cropped to just the five vanilla rows (340x570); the
+  source had eleven more. Cropping from the bottom keeps rows 0-4 at identical coordinates, so no
+  Lua changed. Regenerate mips alpha-weighted if it is ever recut - transparent areas are RGB
+  0,0,0 and a naive filter produces dark halos.
 
 ## NS2 API notes
 

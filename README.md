@@ -95,16 +95,30 @@ ui/LifeformPicker/
 
 ## The atlas
 
-`ui/LifeformPicker/Alien.dds` is 340x1824: a vertical strip of sixteen 340x114 cells. Rows 0-4 are
-Skulk, Gorge, Lerk, Fade, Onos, matching the order of `Plugin.kLifeforms`, so a lifeform index is
-also its texture row.
+`ui/LifeformPicker/Alien.dds` is 340x570: a vertical strip of five 340x114 cells, in the order
+Skulk, Gorge, Lerk, Fade, Onos — matching `Plugin.kLifeforms`, so a lifeform index is also its
+texture row.
 
-The artwork is pure white with the shape carried entirely in the alpha channel. It is drawn at
-flat full opacity — no tinting, and no visual difference between a declared pick and the assumed
-Skulk default.
+It was cut from Shimizu Scoreboard's sixteen-row atlas, whose remaining rows (Prowler, Shell,
+Spur, Veil and other structures) are never sampled here. Cropping them off the **bottom** was
+deliberate: rows 0-4 keep byte-identical coordinates, so no Lua changed, and the visible art is
+not resampled. The mip chain was regenerated with an alpha-weighted filter, since the texture
+stores RGB 0,0,0 in transparent areas and a naive average would drag dark halos into the
+silhouette edges. That took the file from 3.3 MB to 1.0 MB.
 
-Row 5 is Prowler. It is deliberately not exposed; adding it would mean widening the network
-field's `integer (0 to 4)` range and appending to `kLifeforms`.
+Adding Prowler back would mean restoring its row, widening the network field's `integer (0 to 4)`
+range, and appending to `kLifeforms`.
+
+The artwork is pure white with the shape carried entirely in the alpha channel, which makes it a
+clean tint target — `SetColor` multiplies, so white takes any hue exactly. `kIconColour` is set to
+RGB 255,225,187, the cream of Hatta's *Lifeform Selector*: that mod applied a no-op
+`Color(1,1,1,1)`, so its colour actually came from the baked pixels of the vanilla
+`ui/alien_hivestatus_commicons.dds` it used. One colour for every row — no visual difference
+between a declared pick and the assumed Skulk default.
+
+Because the source art is white rather than pre-coloured, changing the whole look is a one-line
+edit to `kIconColour`; `GUIScoreboard.kRedColor` (`Color(1, 0.494, 0, 1)`) gives the more
+saturated alien team orange, for instance.
 
 Within each 340-wide cell the silhouettes only span x 83-250 — the rest is transparent padding —
 so the icon crops to one uniform window (`kCropLeft`/`kCropRight`) shared by every row. This is

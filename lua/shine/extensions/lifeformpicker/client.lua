@@ -13,8 +13,10 @@ local Plugin = ...
 
 local kAtlas = PrecacheAsset( "ui/LifeformPicker/Alien.dds" )
 
--- Alien.dds is a 340x1824 vertical strip of 340x114 cells, one lifeform per row, in the same
--- order as Plugin.kLifeforms.
+-- Alien.dds is a 340x570 vertical strip of 340x114 cells, one lifeform per row, in the same
+-- order as Plugin.kLifeforms. The source atlas it was cut from carried eleven further rows
+-- (Prowler, Shell, Spur, Veil and other structures) that this never samples; they were cropped
+-- off the bottom, which leaves rows 0-4 at unchanged coordinates.
 --
 -- The silhouettes only occupy x 83-250 inside each 340-wide cell; the rest is transparent
 -- padding. Cropping to one uniform window across every row keeps a single geometry for all five
@@ -29,10 +31,16 @@ local kIconHeight = 19
 local kIconWidth = 28
 local kIconGap = 4
 
--- The artwork is pure white with the shape carried entirely in the alpha channel, so it is drawn
--- at plain full opacity and the texture's own transparency does all the work. No tinting, and no
--- visual distinction between a declared pick and the assumed Skulk default.
-local kIconColour = Color( 1, 1, 1, 1 )
+-- The artwork is pure white with the shape carried entirely in the alpha channel, which makes it
+-- an ideal tint target: SetColor multiplies, so white takes any hue cleanly.
+--
+-- This is the cream the old Lifeform Selector mod's icons had. That mod never tinted anything -
+-- it applied a no-op Color(1,1,1,1) - so the colour came from its texture, the vanilla
+-- ui/alien_hivestatus_commicons.dds, whose opaque pixels are baked at RGB 255,225,187. Sampling
+-- it and reproducing the value here gets the same look from white source art.
+--
+-- One colour for every row: no distinction between a declared pick and the assumed Skulk default.
+local kIconColour = Color( 255 / 255, 225 / 255, 187 / 255, 1 )
 
 -- Everything before the round is live. Note this is a set rather than a single comparison: a
 -- match passes through NotStarted, WarmUp, PreGame and Countdown, and testing only for WarmUp
