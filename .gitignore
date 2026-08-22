@@ -1,0 +1,13 @@
+# NS2 / Lua
+*.bak
+*.tmp
+
+# Editors
+.vscode/
+.idea/
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
