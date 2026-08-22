@@ -81,7 +81,24 @@ local function EnsureIcon( PlayerItem )
 	return Icon
 end
 
-Shine.Hook.SetupClassHook( "GUIScoreboard", "Update", "OnLifeformPickerScoreboardUpdate", "PassivePost" )
+-- Both class hooks are installed from inside CallAfterFileLoad rather than at file scope.
+--
+-- This is not optional. Shine.Hook.SetupClassHook resolves the class through _G at the moment it
+-- is called, and if lua/GUIScoreboard.lua has not been loaded yet it prints
+--   [Shine] [Warn] Attempted to hook class/method GUIScoreboard:Update() which does not exist!
+-- and then silently does nothing - the plugin loads and enables perfectly happily while none of
+-- its hooks exist. Client plugins can enable before the map's GUI scripts are loaded, so hooking
+-- at file scope is a race. CallAfterFileLoad fires immediately if the file is already loaded and
+-- otherwise waits, which covers both orderings (and re-fires on a script reload; SetupClassHook
+-- dedupes, so being called twice is harmless).
+--
+-- This is the same idiom Shine's own GUI-hooking plugins use - see extensions/tweaks/client.lua
+-- and extensions/chatbox/client.lua.
+Shine.Hook.CallAfterFileLoad( "lua/GUIScoreboard.lua", function()
+	Shine.Hook.SetupClassHook( "GUIScoreboard", "Update", "OnLifeformPickerScoreboardUpdate", "PassivePost" )
+	Shine.Hook.SetupClassHook( "GUIScoreboard", "SendKeyEvent", "OnLifeformPickerScoreboardKey", "ActivePre" )
+	Plugin.HooksInstalled = true
+end )
 
 function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 	if not Scoreboard.teams then return end
@@ -153,11 +170,10 @@ local function ShowLifeformMenu( Scoreboard )
 	end
 end
 
--- ActivePre: returning a non-nil value skips vanilla's handler entirely and returns that value.
--- Returning true on a hit therefore claims the click, so the vanilla Steam-profile/mute menu does
--- not also open on top of the lifeform menu. Returning nothing lets vanilla proceed untouched.
-Shine.Hook.SetupClassHook( "GUIScoreboard", "SendKeyEvent", "OnLifeformPickerScoreboardKey", "ActivePre" )
-
+-- Hooked as ActivePre (see CallAfterFileLoad above): returning a non-nil value skips vanilla's
+-- handler entirely and returns that value. Returning true on a hit therefore claims the click, so
+-- the vanilla Steam-profile/mute menu does not also open on top of the lifeform menu. Returning
+-- nothing lets vanilla proceed untouched.
 function Plugin:OnLifeformPickerScoreboardKey( Scoreboard, Key, Down )
 	if Key ~= InputKey.MouseButton0 or not Down then return end
 	if not Scoreboard.visible or Scoreboard.hiddenOverride then return end
@@ -199,8 +215,35 @@ Client.HookNetworkMessage( "LifeformPicker_State", function( Message )
 	Selections[ Message.steamId ] = Message.lifeform
 end )
 
+-- Icons are conditional, so "nothing is showing" has several possible causes that look identical
+-- on screen. This reports which one it is. Run `lifeformpicker_status` in the client console.
+local function PrintStatus()
+	local Player = Client.GetLocalPlayer()
+	local Team = Player and Player:GetTeamNumber()
+	local GameInfo = GetGameInfoEntity()
+	local State = GameInfo and GameInfo:GetState()
+
+	local Count = 0
+	for _ in pairs( Selections ) do Count = Count + 1 end
+
+	Print( "[LifeformPicker] hooks installed : %s", tostring( Plugin.HooksInstalled == true ) )
+	Print( "[LifeformPicker] your team       : %s (need %s alien or %s spectator)",
+		tostring( Team ), tostring( kTeam2Index ), tostring( kSpectatorIndex ) )
+	Print( "[LifeformPicker] game state      : %s (pre-round: %s)",
+		tostring( State ), tostring( State ~= nil and kPreRoundStates[ State ] == true ) )
+	Print( "[LifeformPicker] icons should be : %s",
+		tostring( IsPreRound() and IsLocalViewer() ) )
+	Print( "[LifeformPicker] declarations    : %d received", Count )
+end
+
 function Plugin:Initialise()
 	self.Enabled = true
+
+	if not self.AddedStatusCommand then
+		Event.Hook( "Console_lifeformpicker_status", PrintStatus )
+		self.AddedStatusCommand = true
+	end
+
 	return true
 end
 

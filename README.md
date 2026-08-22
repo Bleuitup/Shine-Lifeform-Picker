@@ -16,6 +16,26 @@ typing it into chat.
   Onos. Pick one and your icon updates for everyone who can see it.
 - Icons disappear once the round starts, and all declarations are cleared for the next one.
 
+## When the icons appear
+
+Both conditions must hold, or the scoreboard looks completely untouched:
+
+1. **You are on the alien team, or spectating.** In the ready room or on marines you see nothing —
+   not even other aliens' icons.
+2. **The round has not started.** Game state is `NotStarted`, `WarmUp`, `PreGame` or `Countdown`.
+
+This is stricter than Hatta's *Lifeform Selector*, which only hid icons from marines and so showed
+them to ready-room players too.
+
+If nothing appears and you expected it to, run this in the **client** console:
+
+```bash
+lifeformpicker_status
+```
+
+It reports whether the scoreboard hooks installed, your team, the game state, whether icons
+*should* be showing, and how many declarations the client has received.
+
 ## Who sees what
 
 | | Sees icons | Can declare |
