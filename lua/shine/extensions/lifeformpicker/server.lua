@@ -56,6 +56,14 @@ local function OnSelect( Client, Message )
 	local Player = Client:GetControllingPlayer()
 	if not Player or Player:GetTeamNumber() ~= kTeam2Index then return end
 
+	-- Commanders have no lifeform to declare while they are in the chair. Player:GetIsCommander
+	-- returns false on the base class and is overridden by Commander, so this is polymorphic.
+	--
+	-- Note this rejects the *declaration*, it does not erase an existing one: someone who called
+	-- Fade and then took the chair keeps that stored, hidden while they command, and showing
+	-- again if they log out. Losing it on every accidental chair-tap would be worse.
+	if Player:GetIsCommander() then return end
+
 	local UserId = Client:GetUserId()
 	if not UserId or UserId == 0 then return end
 
