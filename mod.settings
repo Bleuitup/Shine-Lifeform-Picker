@@ -1,5 +1,5 @@
 name        = "[Shine] Lifeform Picker"
-source_dir  = "."
+source_dir  = "source"
 output_dir  = "output"
 description = [=[mod id 3787803421
 
@@ -32,14 +32,8 @@ The icons appear only before the round starts, and disappear the moment it begin
 
 [list]
 [*] Requires [b]Shine[/b]. It installs as a normal Shine extension and is enabled by default; toggle it with [i]sh_loadplugin lifeformpicker[/i].
-[*] Must be run on the server. Clients need the mod too, since the icons and the pick menu are client-side.
+[*] Must be run on the server.
 [/list]
-
-[h1]Compatibility[/h1]
-
-Works alongside scoreboard mods such as Shimizu Scoreboard. Most of them claim lua/GUIScoreboard.lua outright; this one never touches the file, and instead patches the scoreboard's methods at runtime, so it layers on top instead of competing.
-
-Note that Shimizu Scoreboard has a lifeform selector of its own. Running both gives you two sets of icons — pick one.
 
 [h1]Credits[/h1]
 

@@ -60,38 +60,29 @@ Enable or disable it like any Shine plugin:
 sh_loadplugin lifeformpicker
 ```
 
-### Getting the files to clients
-
-Like any Shine extension with a client-side component, the extension folder has to exist on the
-**clients** as well as the server: on connect the server sends `Shine_PluginSync`, and each client
-then loads `client.lua` from its own filesystem. A copy that only exists on the server gives you a
-working server-side plugin with no icons and no texture.
-
-In practice that means the extension folder and `ui/` need to travel in whatever mod the server
-has clients mount — the same requirement as any other client-facing Shine plugin. Dropping it into
-a server's local Shine directory alone is not enough.
-
-## Compatibility
-
-Compatible with **Shimizu Scoreboard** and other scoreboard mods.
-
-Most scoreboard mods claim `lua/GUIScoreboard.lua` through ModLoader — Shimizu takes it in
-`replace` mode, which owns the whole file. This extension never hooks the file at all. It patches
-the class methods at runtime via `Shine.Hook.SetupClassHook`, so it layers on top of whichever mod
-owns the file rather than competing with it.
-
-Shimizu has its own lifeform selector. If you run both you will get two sets of icons; disable one.
+Add it to the server's mod list like any other workshop mod. NS2 pushes it to connecting clients
+automatically, which matters here because the icons and the pick menu are client-side.
 
 ## Layout
 
+Standard NS2 Launch Pad project layout: `mod.settings` and `preview.jpg` sit one level above the
+mod itself, and `output/` is the build Launch Pad publishes.
+
 ```
-lua/shine/extensions/lifeformpicker/
-  shared.lua    plugin declaration + the two network messages
-  server.lua    authority, replication, round lifecycle
-  client.lua    scoreboard icons + the pick menu
-ui/LifeformPicker/
-  Alien.dds     lifeform silhouette atlas
+mod.settings                            workshop metadata: name, description, tags, publish id
+preview.jpg                             workshop preview image
+source/
+  lua/shine/extensions/lifeformpicker/
+    shared.lua                          plugin declaration + the two network messages
+    server.lua                          authority, replication, round lifecycle
+    client.lua                          scoreboard icons + the pick menu
+  ui/LifeformPicker/
+    Alien.dds                           lifeform silhouette atlas
+output/                                 build output, not tracked in git
 ```
+
+Paths inside `source/` are what the game sees once built, so `ui/LifeformPicker/Alien.dds` in the
+Lua resolves correctly and `source/` itself never appears at runtime.
 
 ## The atlas
 

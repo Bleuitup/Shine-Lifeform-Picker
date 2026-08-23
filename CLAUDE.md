@@ -15,10 +15,20 @@ that gives it mechanical consequences as out of scope.
 
 ## Layout
 
+Standard NS2 Launch Pad project layout, matching the author's other mods: `mod.settings` and
+`preview.jpg` sit one level **above** the mod content, which lives under `source/`.
+
 ```
-lua/shine/extensions/lifeformpicker/{shared,server,client}.lua
-ui/LifeformPicker/Alien.dds
+mod.settings                                        workshop metadata
+preview.jpg                                         workshop preview
+source/lua/shine/extensions/lifeformpicker/{shared,server,client}.lua
+source/ui/LifeformPicker/Alien.dds
+output/                                             Launch Pad build output, gitignored
 ```
+
+`source/` is stripped at build time, so runtime paths are `lua/...` and `ui/...` — which is why
+`PrecacheAsset( "ui/LifeformPicker/Alien.dds" )` is correct as written. **Do not** add `source/`
+to any path inside the Lua.
 
 Three Lua files and one texture. Keep it that way — the value of this extension over the
 alternatives is that it is small enough to read in one sitting.
@@ -28,8 +38,10 @@ alternatives is that it is small enough to read in one sitting.
 **1. The files must reach clients, not just the server.** Shine loads a plugin's
 `client.lua` from the *client's* filesystem (`Shine_PluginSync` tells the client to
 `EnableExtension`, which then loads the file locally). A server-only install yields a server
-plugin with no UI and no texture. There is intentionally **no `lua/entry/*.entry`** — mod content
-mounts into the virtual filesystem regardless, and an entry file only exists to bootstrap
+plugin with no UI and no texture. Publishing as a workshop mod handles this — NS2 pushes server
+mods to connecting clients automatically — so it only bites if someone hand-drops the extension
+folder into a server's Shine directory. There is intentionally **no `lua/entry/*.entry`**: mod
+content mounts into the virtual filesystem regardless, and an entry file exists only to bootstrap
 ModLoader file hooks, which this does not use.
 
 **2. The scoreboard is reached with `Shine.Hook.SetupClassHook`, never a ModLoader file hook.**
