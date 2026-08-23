@@ -30,6 +30,16 @@ output/                                             Launch Pad build output, git
 `PrecacheAsset( "ui/LifeformPicker/Alien.dds" )` is correct as written. **Do not** add `source/`
 to any path inside the Lua.
 
+**`output/` is gitignored and must be built before publishing.** A fresh clone has none, and
+Launch Pad then reports the output directory as empty. There is no compilation step, so the build
+is `rm -rf output && mkdir -p output && cp -r source/. output/`, leaving `lua/` and `ui/` at the
+root of `output/`.
+
+Because it is ignored, **`output/` does not follow branch switches** — it silently keeps whatever
+was last built, which is an easy way to publish the wrong version. `.output-build-info` at the
+repo root records the branch and commit it came from; check it against `git log -1` before
+publishing, and rebuild after any checkout.
+
 Three Lua files and one texture. Keep it that way — the value of this extension over the
 alternatives is that it is small enough to read in one sitting.
 
