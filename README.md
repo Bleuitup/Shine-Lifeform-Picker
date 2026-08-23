@@ -63,6 +63,23 @@ sh_loadplugin lifeformpicker
 Add it to the server's mod list like any other workshop mod. NS2 pushes it to connecting clients
 automatically, which matters here because the icons and the pick menu are client-side.
 
+## Enhanced Scoreboard integration
+
+If **Devnull's Enhanced Scoreboard** is installed — or Shimizu Scoreboard, whose scoreboard derives
+from it — its per-team counter bar reflects **declarations** during the pre-round instead of the
+all-Skulk reality, then returns to live counts the moment the round starts.
+
+So instead of the bar reading `6 Skulk` while everyone stands around in the ready room, it reads
+what the team has actually called: `2 Skulk · 1 Gorge · 1 Lerk · 1 Fade · 1 Onos`.
+
+- Players who haven't declared count as **Skulk**, matching their scoreboard icon, so the totals
+  always add up to the size of the team.
+- The **commander is excluded**, since they aren't evolving into anything.
+- Requires no changes to Enhanced Scoreboard, and no configuration. If it isn't installed, nothing
+  is hooked and nothing changes.
+
+`lifeformpicker_status` reports whether the integration found a counter bar to hook.
+
 ## Layout
 
 Standard NS2 Launch Pad project layout: `mod.settings` and `preview.jpg` sit one level above the

@@ -102,10 +102,19 @@ end
 --
 -- This is the same idiom Shine's own GUI-hooking plugins use - see extensions/tweaks/client.lua
 -- and extensions/chatbox/client.lua.
+-- Forward declaration: the body is defined further down, alongside the rest of the Enhanced
+-- Scoreboard integration, but the callback below needs to see the local.
+local SetUpEnhancedScoreboardIntegration
+
 Shine.Hook.CallAfterFileLoad( "lua/GUIScoreboard.lua", function()
 	Shine.Hook.SetupClassHook( "GUIScoreboard", "Update", "OnLifeformPickerScoreboardUpdate", "PassivePost" )
 	Shine.Hook.SetupClassHook( "GUIScoreboard", "SendKeyEvent", "OnLifeformPickerScoreboardKey", "ActivePre" )
 	Plugin.HooksInstalled = true
+
+	-- Runs here rather than at file scope for the same reason: whichever mod owns
+	-- lua/GUIScoreboard.lua has finished loading by now, so this is the first moment we can tell
+	-- whether Enhanced Scoreboard's counter bar exists. Defined further down the file.
+	SetUpEnhancedScoreboardIntegration()
 end )
 
 function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
@@ -146,6 +155,109 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 			end
 		end
 	end
+end
+
+--------------------------------------------------------------------------------
+-- Optional integration: Devnull's Enhanced Scoreboard (and derivatives)
+--------------------------------------------------------------------------------
+-- Enhanced Scoreboard draws a per-team bar counting the lifeforms actually in play. During the
+-- pre-round that bar is all Skulks, which is exactly when it could be showing something useful:
+-- what the team has *called*.
+--
+-- We do that without touching their mod at all. Their counter reads only from the scoreboard
+-- records handed to GUIScoreboard:UpdateTeam_EalIcons, so during the pre-round we call it with a
+-- copy of those records whose status fields carry each player's declaration. Their own counting
+-- code then produces pick counts. Outside the pre-round we pass the real records straight through
+-- and they behave precisely as they do without us installed.
+--
+-- Their EALitems table is a file-local, so writing counts directly is not possible even if we
+-- wanted to - substituting the input is both the only route and the tidier one.
+
+-- Both fields are set because the two known implementations read different ones: Devnull's
+-- Enhanced Scoreboard compares StatusId against the kPlayerStatus enum, while Shimizu Scoreboard
+-- (whose scoreboard derives from it) string-matches Status. Setting both serves either.
+local kStatusIdForLifeform = {
+	[ 0 ] = kPlayerStatus.Skulk,
+	[ 1 ] = kPlayerStatus.Gorge,
+	[ 2 ] = kPlayerStatus.Lerk,
+	[ 3 ] = kPlayerStatus.Fade,
+	[ 4 ] = kPlayerStatus.Onos
+}
+
+local kStatusTextForLifeform = {
+	[ 0 ] = "STATUS_SKULK",
+	[ 1 ] = "STATUS_GORGE",
+	[ 2 ] = "STATUS_LERK",
+	[ 3 ] = "STATUS_FADE",
+	[ 4 ] = "STATUS_ONOS"
+}
+
+local OldUpdateEalIcons
+
+-- Returns a stand-in for TeamObject whose teamScores carry declarations instead of live status.
+-- Records are shallow-copied rather than mutated: they come from the scoreboard's own cache and
+-- other code (the Status column, the player rows) reads them in the same frame.
+local function BuildDeclaredTeamObject( TeamObject )
+	local Scores = TeamObject.teamScores
+	if not Scores then return TeamObject end
+
+	local Swapped = {}
+	for i = 1, #Scores do
+		local Record = Scores[ i ]
+		local Copy = {}
+		for Key, Value in pairs( Record ) do
+			Copy[ Key ] = Value
+		end
+
+		if Record.IsCommander then
+			-- The commander is not evolving into anything, so counting them would inflate a
+			-- lifeform by one for the whole pre-round. Commander is a real kPlayerStatus value
+			-- and matches none of the lifeform tests, so this simply drops them from the totals.
+			Copy.StatusId = kPlayerStatus.Commander
+			Copy.Status = Locale.ResolveString( "STATUS_COMMANDER" )
+		else
+			-- Undeclared players resolve to Skulk, matching what their scoreboard icon shows, so
+			-- the counts always add up to the size of the team.
+			local Index = GetLifeformFor( Record.ClientIndex ) or Plugin.kDefaultLifeform
+			Copy.StatusId = kStatusIdForLifeform[ Index ]
+			Copy.Status = Locale.ResolveString( kStatusTextForLifeform[ Index ] )
+		end
+
+		Swapped[ i ] = Copy
+	end
+
+	local Stand = {}
+	for Key, Value in pairs( TeamObject ) do
+		Stand[ Key ] = Value
+	end
+	Stand.teamScores = Swapped
+
+	return Stand
+end
+
+function Plugin:OnLifeformPickerEalIcons( Scoreboard, TeamObject )
+	-- Never swallow the call. If anything here is not as expected the original still runs with
+	-- its real input, so a mistake on our side degrades to "no integration" rather than to a
+	-- frozen counter bar.
+	if not OldUpdateEalIcons then return end
+
+	if TeamObject and TeamObject.teamNumber == kTeam2Index
+	and IsPreRound() and IsLocalViewer() then
+		return OldUpdateEalIcons( Scoreboard, BuildDeclaredTeamObject( TeamObject ) )
+	end
+
+	return OldUpdateEalIcons( Scoreboard, TeamObject )
+end
+
+-- Assigns to the local forward-declared above; deliberately not a global.
+function SetUpEnhancedScoreboardIntegration()
+	-- Absent unless Enhanced Scoreboard, Shimizu, or something derived from them owns the
+	-- scoreboard. No mod, no hook, no behaviour change.
+	if not GUIScoreboard.UpdateTeam_EalIcons then return end
+
+	OldUpdateEalIcons = Shine.Hook.SetupClassHook( "GUIScoreboard", "UpdateTeam_EalIcons",
+		"OnLifeformPickerEalIcons", "Replace" )
+	Plugin.EalIntegrationActive = OldUpdateEalIcons ~= nil
 end
 
 local function ShowLifeformMenu( Scoreboard )
@@ -242,6 +354,9 @@ local function PrintStatus()
 	Print( "[LifeformPicker] icons should be : %s",
 		tostring( IsPreRound() and IsLocalViewer() ) )
 	Print( "[LifeformPicker] declarations    : %d received", Count )
+	Print( "[LifeformPicker] enhanced sb     : %s",
+		Plugin.EalIntegrationActive and "counter bar hooked"
+			or "not present (no Enhanced Scoreboard / Shimizu)" )
 end
 
 function Plugin:Initialise()

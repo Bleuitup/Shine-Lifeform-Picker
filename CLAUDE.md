@@ -73,6 +73,33 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   Lua changed. Regenerate mips alpha-weighted if it is ever recut - transparent areas are RGB
   0,0,0 and a naive filter produces dark halos.
 
+## Enhanced Scoreboard integration (1.2)
+
+Devnull's Enhanced Scoreboard (workshop `2597529958`, files under `lua/Devnull_ESB/`) draws a
+per-team counter bar. Shimizu Scoreboard carries a port of the same code, so both expose
+`GUIScoreboard:UpdateTeam_EalIcons( teamObject )`.
+
+**We substitute its input, never its output.** Its alien branch counts solely from
+`teamObject.teamScores[i].StatusId` against `kPlayerStatus.Skulk` / `.SkulkEgg` and so on, so
+during the pre-round we call it with shallow-copied records whose status fields carry each
+player's declaration. Their own arithmetic then yields pick counts.
+
+Three things force this shape, and none of them are negotiable:
+
+- Their `EALitems` table is a **file-local**, so writing counts directly is impossible from here.
+- Records are **copied, not mutated** — they come from the scoreboard's own cache and the Status
+  column and player rows read them in the same frame.
+- **Both** `StatusId` and `Status` are set. Enhanced Scoreboard compares `StatusId` against the
+  enum; Shimizu string-matches `Status` via `GetCountByStatus`. Setting both serves either.
+
+The hook is installed from inside the same `CallAfterFileLoad` as the others, because that is the
+first moment the owning mod has finished loading and `GUIScoreboard.UpdateTeam_EalIcons` can be
+tested for. Absent, nothing is hooked.
+
+It is a `Replace` hook, so `Plugin:OnLifeformPickerEalIcons` **must always call through** to the
+captured original — on every path, including the ones it declines to touch. Returning without
+calling it would freeze their counter bar.
+
 ## NS2 API notes
 
 Facts verified against the game source; they are easy to get wrong from memory.
