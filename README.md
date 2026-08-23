@@ -90,6 +90,28 @@ output/                                 build output, not tracked in git
 Paths inside `source/` are what the game sees once built, so `ui/LifeformPicker/Alien.dds` in the
 Lua resolves correctly and `source/` itself never appears at runtime.
 
+## Publishing
+
+**`output/` is what Launch Pad uploads, and it is not in git.** A fresh clone has no `output/` at
+all, and Launch Pad will report the output directory as empty until it is built.
+
+There is no compilation step — the mod is Lua and one texture — so building is a straight copy of
+`source/` into `output/`:
+
+```bash
+rm -rf output && mkdir -p output && cp -r source/. output/
+```
+
+`output/` must end up with `lua/` and `ui/` at *its* root, not `output/source/lua`.
+
+Two things to watch:
+
+- **`output/` does not follow branch switches.** Git leaves ignored files alone, so after
+  `git checkout` it still holds whatever was last built. Rebuild before publishing or you will
+  upload the wrong version.
+- `.output-build-info` at the repo root records the branch and commit `output/` was built from.
+  Check it against `git log -1` if you are unsure whether the build is current.
+
 ## The atlas
 
 `ui/LifeformPicker/Alien.dds` is 340x570: a vertical strip of five 340x114 cells, in the order

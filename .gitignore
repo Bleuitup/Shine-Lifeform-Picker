@@ -14,3 +14,4 @@ Desktop.ini
 
 # NS2 Launch Pad build output
 output/
+.output-build-info
