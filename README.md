@@ -107,8 +107,9 @@ Lua resolves correctly and `source/` itself never appears at runtime.
 Skulk, Gorge, Lerk, Fade, Onos — matching `Plugin.kLifeforms`, so a lifeform index is also its
 texture row.
 
-It was cut from Shimizu Scoreboard's sixteen-row atlas, whose remaining rows (Prowler, Shell,
-Spur, Veil and other structures) are never sampled here. Cropping them off the **bottom** was
+It was cut from Devnull's sixteen-row atlas (shipped with *Enhanced Scoreboard*, and copied
+verbatim into *Shimizu Scoreboard*), whose remaining rows (Prowler, Shell, Spur, Veil and other
+structures) are never sampled here. Cropping them off the **bottom** was
 deliberate: rows 0-4 keep byte-identical coordinates, so no Lua changed, and the visible art is
 not resampled. The mip chain was regenerated with an alpha-weighted filter, since the texture
 stores RGB 0,0,0 in transparent areas and a naive average would drag dark halos into the
@@ -149,5 +150,9 @@ maths, so it follows resolution and scoreboard-width changes without adjustment.
 ## Credits
 
 The idea, and the click-your-icon-for-a-dropdown interaction, come from **Hatta's** discontinued
-*Shine - Lifeform Selector*. The lifeform artwork is from **Shimizu Scoreboard**. This is an
-independent implementation rather than a fork of either.
+*Shine - Lifeform Selector*.
+
+The lifeform artwork is **Devnull's**, from *Enhanced Scoreboard*. It reached this mod by way of
+*Shimizu Scoreboard*, which ships a byte-identical copy, but it originates with Devnull.
+
+This is an independent implementation rather than a fork of any of them.

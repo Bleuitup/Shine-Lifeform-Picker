@@ -68,6 +68,9 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   never tinted anything (it applied a no-op `Color(1,1,1,1)`) and simply inherited the baked
   colour of the vanilla `ui/alien_hivestatus_commicons.dds` it drew from. Our source art is pure
   white, so `SetColor` reproduces that hue exactly and any other is a one-line change.
+- **The atlas is Devnull's artwork**, from Enhanced Scoreboard (workshop 2597529958,
+  ui/Devnull/Alien.dds). Shimizu Scoreboard ships a byte-identical copy and is where ours was
+  taken from, but credit belongs to Devnull. Verified by md5.
 - **Prowler is excluded.** The atlas was cropped to just the five vanilla rows (340x570); the
   source had eleven more. Cropping from the bottom keeps rows 0-4 at identical coordinates, so no
   Lua changed. Regenerate mips alpha-weighted if it is ever recut - transparent areas are RGB
