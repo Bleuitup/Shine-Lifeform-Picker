@@ -53,6 +53,13 @@ log out later, and your Fade is still there.
 Marines are filtered **server-side** — the data is never sent to their machine, rather than being
 sent and hidden.
 
+### Declarations reset every round
+
+All declarations are cleared, and everyone's row returns to the default, both when a round
+starts and when it resets for the next one. This is broadcast to every alien and spectator
+already connected, not just applied on the server -- a client that stays on the alien team
+across a round transition still gets told the picks are gone.
+
 ## Installation
 
 This is a Shine extension and nothing else — the whole thing is

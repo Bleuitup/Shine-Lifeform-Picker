@@ -48,4 +48,10 @@ Shared.RegisterNetworkMessage( "LifeformPicker_State", {
 	lifeform = "integer (0 to 4)"
 } )
 
+-- Server -> Client: forget every declaration held locally. Sent when the round starts and when
+-- the round resets, since server.lua wipes its own table at both points and clients otherwise
+-- have no way to learn that -- their cached picks would silently survive into the next pre-round
+-- and misreport as fresh declarations instead of resetting to "nobody has called anything yet".
+Shared.RegisterNetworkMessage( "LifeformPicker_ClearAll", {} )
+
 return Plugin
