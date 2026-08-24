@@ -39,8 +39,13 @@ local kIconGap = 4
 -- ui/alien_hivestatus_commicons.dds, whose opaque pixels are baked at RGB 255,225,187. Sampling
 -- it and reproducing the value here gets the same look from white source art.
 --
--- One colour for every row: no distinction between a declared pick and the assumed Skulk default.
-local kIconColour = Color( 255 / 255, 225 / 255, 187 / 255, 1 )
+-- Two tints signal actual intent versus assumption, replacing the earlier single-colour design.
+-- Undeclared uses the grey that Enhanced Scoreboard / Shimizu Scoreboard use for "not yet
+-- meaningful" (kEalInactiveColor, RGB 96,96,96); a real declaration switches the icon to the
+-- cream above, so a glance at colour alone tells you whether a pick is someone's stated intent
+-- or just the assumed Skulk default.
+local kIconColourUndeclared = Color( 96 / 255, 96 / 255, 96 / 255, 1 )
+local kIconColourDeclared = Color( 255 / 255, 225 / 255, 187 / 255, 1 )
 
 -- Everything before the round is live. Note this is a set rather than a single comparison: a
 -- match passes through NotStarted, WarmUp, PreGame and Countdown, and testing only for WarmUp
@@ -73,6 +78,13 @@ local function GetLifeformFor( ClientIndex )
 	return Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ] or Plugin.kDefaultLifeform
 end
 
+-- Distinguishes an actual pick from the assumed default, which GetLifeformFor deliberately
+-- collapses into the same value (index 0) so texture selection does not need to care. Rendering
+-- does care, hence a second, separate lookup rather than overloading the first.
+local function HasDeclared( ClientIndex )
+	return Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ] ~= nil
+end
+
 local function EnsureIcon( PlayerItem )
 	local Icon = PlayerItem.LifeformPickerIcon
 	if Icon then return Icon end
@@ -80,7 +92,8 @@ local function EnsureIcon( PlayerItem )
 	Icon = GUIManager:CreateGraphicItem()
 	Icon:SetAnchor( GUIItem.Left, GUIItem.Center )
 	Icon:SetTexture( kAtlas )
-	Icon:SetColor( kIconColour )
+	-- No SetColor here: declared-vs-not can change every frame (a pick lands, a round resets),
+	-- so the colour is set on every render pass below instead of once at creation.
 	Icon:SetStencilFunc( GUIItem.NotEqual )
 	Icon:SetIsVisible( false )
 	PlayerItem.Background:AddChild( Icon )
@@ -136,6 +149,7 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 			-- ResizePlayerList.
 			if Show and IsAlienTeam and not IsCommander then
 				local Index = GetLifeformFor( PlayerItem.ClientIndex )
+				local Declared = HasDeclared( PlayerItem.ClientIndex )
 
 				-- Positioned off the Status column rather than from hard-coded column maths, so
 				-- it tracks resolution changes and scoreboard width changes on its own.
@@ -146,6 +160,7 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 					-kIconHeight * 0.5 * Scale, 0 ) )
 				Icon:SetTexturePixelCoordinates( kCropLeft, kCellHeight * Index,
 					kCropRight, kCellHeight * ( Index + 1 ) )
+				Icon:SetColor( Declared and kIconColourDeclared or kIconColourUndeclared )
 				Icon:SetIsVisible( true )
 			else
 				Icon:SetIsVisible( false )
@@ -232,6 +247,13 @@ end
 
 Client.HookNetworkMessage( "LifeformPicker_State", function( Message )
 	Selections[ Message.steamId ] = Message.lifeform
+end )
+
+-- Server -> Client: forget every cached declaration. Sent when the round starts or resets, since
+-- server.lua wipes its own table at those points and this is what keeps the client's copy from
+-- going stale and misreporting last round's picks as current.
+Client.HookNetworkMessage( "LifeformPicker_ClearAll", function()
+	Selections = {}
 end )
 
 -- Icons are conditional, so "nothing is showing" has several possible causes that look identical

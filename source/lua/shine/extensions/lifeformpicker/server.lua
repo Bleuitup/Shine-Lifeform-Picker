@@ -12,7 +12,8 @@
 --  2. Declarations are only ever transmitted to aliens and spectators. That mod broadcast to
 --     everyone and relied on marine clients choosing not to draw them, which puts the data on
 --     the enemy's machine regardless.
---  3. State is wiped when the round starts, so nothing leaks between rounds.
+--  3. State is wiped when the round starts, so nothing leaks between rounds -- and the wipe is
+--     broadcast to clients, not just applied here, so their cached picks do not go stale.
 
 local Plugin = ...
 
@@ -47,6 +48,18 @@ end
 local function SendAllTo( Client )
 	for SteamId, Lifeform in pairs( Selections ) do
 		SendTo( Client, SteamId, Lifeform )
+	end
+end
+
+-- Tells every eligible viewer to forget its cached declarations. Needed wherever Selections is
+-- wiped below: without this, an already-connected client keeps showing last round's picks as if
+-- they were still current, since nothing else would ever tell it otherwise.
+local function BroadcastClearAll()
+	local Clients = Shine.GetAllClients()
+	for i = 1, #Clients do
+		if IsViewer( Clients[ i ] ) then
+			Server.SendNetworkMessage( Clients[ i ], "LifeformPicker_ClearAll", {}, true )
+		end
 	end
 end
 
@@ -88,15 +101,19 @@ function Plugin:PostJoinTeam( Gamerules, Player, OldTeam, NewTeam, Force, ShineF
 end
 
 -- Declarations describe the round that is about to start, so they stop being meaningful the
--- moment it does. Clearing here means the next pre-round always begins from a clean slate.
+-- moment it does. Clearing here means the next pre-round always begins from a clean slate, and
+-- broadcasting the clear is what makes already-connected clients actually forget last round's
+-- picks instead of continuing to display them as current.
 function Plugin:SetGameState( Gamerules, NewState, OldState )
 	if NewState == kGameState.Started then
 		Selections = {}
+		BroadcastClearAll()
 	end
 end
 
 function Plugin:OnGameReset( Gamerules )
 	Selections = {}
+	BroadcastClearAll()
 end
 
 function Plugin:ClientDisconnect( Client )
