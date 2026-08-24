@@ -13,7 +13,11 @@
 -- normalise or validate the value - it cannot arrive malformed.
 
 local Plugin = Shine.Plugin( ... )
+<<<<<<< HEAD
 Plugin.Version = "1.2-dev"
+=======
+Plugin.Version = "1.1"
+>>>>>>> main
 Plugin.NS2Only = true
 
 Plugin.PrintName = "Lifeform Picker"

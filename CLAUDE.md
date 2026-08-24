@@ -73,6 +73,12 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   field by design.
 - **Marines are filtered server-side**, per-client rather than broadcast. Client-side hiding would
   still put the data on their machine.
+- **Commanders neither show an icon nor can declare** (1.1). Client checks
+  `Scoreboard_GetPlayerData( idx, "IsCommander" )`; the server independently rejects with
+  `Player:GetIsCommander()`, which the base class defines as `false` and `Commander` overrides.
+  The rejection does **not** erase a stored declaration — it is hidden while commanding and
+  returns on logout, because losing it to an accidental chair-tap would be worse. Commanders
+  still *see* everyone else's icons.
 - **One flat icon colour, no declared-vs-default distinction.** An explicit product decision, not
   an oversight. `kIconColour` is RGB 255,225,187 — the cream of Hatta's *Lifeform Selector*, which
   never tinted anything (it applied a no-op `Color(1,1,1,1)`) and simply inherited the baked
@@ -147,3 +153,5 @@ Useful checks in-game:
 - A marine on the same server never receives declarations (verify server-side, not just visually).
 - Clicking your own icon opens the menu **at the cursor**; clicking another player's does not.
 - Switching teams mid-pre-round does not leave a stale icon on the recycled row.
+- The alien commander has no icon on their own row but still sees everyone else's.
+- A declaration made before taking the chair reappears after logging out of it.

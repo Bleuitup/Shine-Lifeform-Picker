@@ -132,12 +132,18 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 			local PlayerItem = PlayerList[ p ]
 			local Icon = EnsureIcon( PlayerItem )
 
+			-- The commander is not going to evolve into anything, so there is nothing for them
+			-- to declare and an icon on their row would just be noise. They still see everyone
+			-- else's - arguably the person who most wants to know the team's composition.
+			local IsCommander = PlayerItem.ClientIndex
+				and Scoreboard_GetPlayerData( PlayerItem.ClientIndex, "IsCommander" ) == true
+
 			-- Every row is touched on every pass, including marine and ready-room rows. Player
 			-- items are pooled and recycled between teams, so a row that used to belong to an
 			-- alien can reappear on the marine list; setting visibility unconditionally here is
 			-- what stops it carrying its old icon across, and removes any need to also hook
 			-- ResizePlayerList.
-			if Show and IsAlienTeam then
+			if Show and IsAlienTeam and not IsCommander then
 				local Index = GetLifeformFor( PlayerItem.ClientIndex )
 
 				-- Positioned off the Status column rather than from hard-coded column maths, so
@@ -305,8 +311,13 @@ function Plugin:OnLifeformPickerScoreboardKey( Scoreboard, Key, Down )
 
 	-- Spectators can see declarations but cannot make them, and you may only declare for
 	-- yourself, so only your own row responds to a click.
+	--
+	-- Commanders are excluded too: they have no lifeform to call while in the chair. The
+	-- server enforces this as well; this check only avoids offering a menu that would be
+	-- rejected. Their row has no icon to click anyway, so this is belt and braces.
 	local Player = Client.GetLocalPlayer()
 	if not Player or Player:GetTeamNumber() ~= kTeam2Index then return end
+	if Player.GetIsCommander and Player:GetIsCommander() then return end
 
 	local LocalSteamId = tostring( Client.GetSteamId() )
 	local MouseX, MouseY = Client.GetCursorPosScreen()

@@ -41,8 +41,14 @@ It reports whether the scoreboard hooks installed, your team, the game state, wh
 | | Sees icons | Can declare |
 |---|---|---|
 | Aliens | Yes | Yes |
+| Alien commander | Yes | **No** |
 | Spectators | Yes | No |
 | Marines | **No** | No |
+
+The commander has no lifeform to call while in the chair, so their row carries no icon and they
+cannot declare. They still see everyone else's — arguably the person who most wants to know the
+team's composition. An existing declaration is *hidden*, not erased: call Fade, take the chair,
+log out later, and your Fade is still there.
 
 Marines are filtered **server-side** — the data is never sent to their machine, rather than being
 sent and hidden.
