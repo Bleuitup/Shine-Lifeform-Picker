@@ -73,6 +73,14 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   field by design.
 - **Marines are filtered server-side**, per-client rather than broadcast. Client-side hiding would
   still put the data on their machine.
+- **State resets are broadcast, not just applied locally on the server** (1.1.1 fix).
+  `LifeformPicker_ClearAll` is sent to every eligible viewer whenever `Selections` is wiped
+  (round start, round reset). Without it, a client that never performs a team-join action
+  across a round transition keeps its stale cache forever -- `PostJoinTeam` is the only other
+  point a client learns anything, and it only fires on an actual join. This was a live,
+  invisible bug in 1.0/1.1: a stale pick and a fresh default rendered identically under the
+  single-colour design, so nothing looked wrong until 1.3 added a second colour and made a
+  stale cream icon visibly distinguishable from a correctly-reset one.
 - **Commanders neither show an icon nor can declare** (1.1). Client checks
   `Scoreboard_GetPlayerData( idx, "IsCommander" )`; the server independently rejects with
   `Player:GetIsCommander()`, which the base class defines as `false` and `Commander` overrides.

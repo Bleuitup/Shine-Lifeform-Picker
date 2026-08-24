@@ -234,6 +234,13 @@ Client.HookNetworkMessage( "LifeformPicker_State", function( Message )
 	Selections[ Message.steamId ] = Message.lifeform
 end )
 
+-- Server -> Client: forget every cached declaration. Sent when the round starts or resets, since
+-- server.lua wipes its own table at those points and this is what keeps the client's copy from
+-- going stale and misreporting last round's picks as current.
+Client.HookNetworkMessage( "LifeformPicker_ClearAll", function()
+	Selections = {}
+end )
+
 -- Icons are conditional, so "nothing is showing" has several possible causes that look identical
 -- on screen. This reports which one it is. Run `lifeformpicker_status` in the client console.
 local function PrintStatus()
