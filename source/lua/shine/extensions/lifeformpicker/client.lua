@@ -4,6 +4,11 @@
 -- Draws a lifeform icon on each alien scoreboard row during the pre-round, and lets you click
 -- your own icon to declare what you intend to play.
 --
+-- A pick is sticky across round transitions - see server.lua - so this file distinguishes the
+-- lifeform *value* (which persists) from whether it is *confirmed* for the round in progress
+-- (which does not): the icon always shows the last value chosen, tinted grey until it has been
+-- confirmed and cream once it has.
+--
 -- The scoreboard is reached with Shine.Hook.SetupClassHook rather than a ModLoader file hook.
 -- That matters for compatibility: mods such as Shimizu Scoreboard claim lua/GUIScoreboard.lua in
 -- "replace" mode, and a second mod hooking the same file fights it. Patching the class methods at
@@ -39,13 +44,13 @@ local kIconGap = 4
 -- ui/alien_hivestatus_commicons.dds, whose opaque pixels are baked at RGB 255,225,187. Sampling
 -- it and reproducing the value here gets the same look from white source art.
 --
--- Two tints signal actual intent versus assumption, replacing the earlier single-colour design.
--- Undeclared uses the grey that Enhanced Scoreboard / Shimizu Scoreboard use for "not yet
--- meaningful" (kEalInactiveColor, RGB 96,96,96); a real declaration switches the icon to the
--- cream above, so a glance at colour alone tells you whether a pick is someone's stated intent
--- or just the assumed Skulk default.
-local kIconColourUndeclared = Color( 96 / 255, 96 / 255, 96 / 255, 1 )
-local kIconColourDeclared = Color( 255 / 255, 225 / 255, 187 / 255, 1 )
+-- Two tints signal confirmed intent versus a value that is only remembered from before. Grey is
+-- the same "not yet meaningful" tone Enhanced Scoreboard / Shimizu Scoreboard use for their own
+-- inactive icons (kEalInactiveColor, RGB 96,96,96); confirming switches the icon to the cream
+-- above. A pick that survived a round transition is grey with the same shape it had before -
+-- only cream, not the icon itself, is what confirming restores.
+local kIconColourUnconfirmed = Color( 96 / 255, 96 / 255, 96 / 255, 1 )
+local kIconColourConfirmed = Color( 255 / 255, 225 / 255, 187 / 255, 1 )
 
 -- Everything before the round is live. Note this is a set rather than a single comparison: a
 -- match passes through NotStarted, WarmUp, PreGame and Countdown, and testing only for WarmUp
@@ -57,7 +62,10 @@ local kPreRoundStates = {
 	[ kGameState.Countdown ] = true
 }
 
--- [ steamId string ] = lifeform index, as replicated by the server.
+-- [ steamId string ] = { lifeform = index, confirmed = boolean }, as replicated by the server.
+-- A player with no entry has never declared at all, which the lookups below distinguish from a
+-- present-but-unconfirmed entry: both render grey, but only the former falls back to the default
+-- lifeform rather than showing a remembered one.
 local Selections = {}
 
 local function IsPreRound()
@@ -71,18 +79,21 @@ local function IsLocalViewer()
 	return Team == kTeam2Index or Team == kSpectatorIndex
 end
 
--- GetSteamIdForClientIndex returns nil until the player's PlayerInfoEntity has replicated, so the
--- tostring() here can legitimately produce "nil". That simply misses the table and falls back to
--- the Skulk default, which is the correct thing to show anyway.
+-- GetSteamIdForClientIndex returns nil until that player's PlayerInfoEntity has replicated, so
+-- the tostring() here can legitimately produce "nil". That simply misses the table and falls
+-- back to the Skulk default, which is the correct thing to show anyway.
 local function GetLifeformFor( ClientIndex )
-	return Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ] or Plugin.kDefaultLifeform
+	local Entry = Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ]
+	return Entry and Entry.lifeform or Plugin.kDefaultLifeform
 end
 
--- Distinguishes an actual pick from the assumed default, which GetLifeformFor deliberately
--- collapses into the same value (index 0) so texture selection does not need to care. Rendering
--- does care, hence a second, separate lookup rather than overloading the first.
-local function HasDeclared( ClientIndex )
-	return Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ] ~= nil
+-- Whether the current value showing for this player has actually been confirmed for the round in
+-- progress, as opposed to only being remembered from a previous one. Drives the grey/cream tint;
+-- GetLifeformFor deliberately does not care about this distinction, since the texture shown is
+-- the same lifeform either way.
+local function IsConfirmed( ClientIndex )
+	local Entry = Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ]
+	return Entry ~= nil and Entry.confirmed == true
 end
 
 local function EnsureIcon( PlayerItem )
@@ -92,7 +103,7 @@ local function EnsureIcon( PlayerItem )
 	Icon = GUIManager:CreateGraphicItem()
 	Icon:SetAnchor( GUIItem.Left, GUIItem.Center )
 	Icon:SetTexture( kAtlas )
-	-- No SetColor here: declared-vs-not can change every frame (a pick lands, a round resets),
+	-- No SetColor here: confirmed-vs-not can change every frame (a pick lands, a round resets),
 	-- so the colour is set on every render pass below instead of once at creation.
 	Icon:SetStencilFunc( GUIItem.NotEqual )
 	Icon:SetIsVisible( false )
@@ -149,7 +160,7 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 			-- ResizePlayerList.
 			if Show and IsAlienTeam and not IsCommander then
 				local Index = GetLifeformFor( PlayerItem.ClientIndex )
-				local Declared = HasDeclared( PlayerItem.ClientIndex )
+				local Confirmed = IsConfirmed( PlayerItem.ClientIndex )
 
 				-- Positioned off the Status column rather than from hard-coded column maths, so
 				-- it tracks resolution changes and scoreboard width changes on its own.
@@ -160,7 +171,7 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 					-kIconHeight * 0.5 * Scale, 0 ) )
 				Icon:SetTexturePixelCoordinates( kCropLeft, kCellHeight * Index,
 					kCropRight, kCellHeight * ( Index + 1 ) )
-				Icon:SetColor( Declared and kIconColourDeclared or kIconColourUndeclared )
+				Icon:SetColor( Confirmed and kIconColourConfirmed or kIconColourUnconfirmed )
 				Icon:SetIsVisible( true )
 			else
 				Icon:SetIsVisible( false )
@@ -181,7 +192,9 @@ local function ShowLifeformMenu( Scoreboard )
 	Menu:ResetButtons()
 
 	for i = 1, #Plugin.kLifeforms do
-		-- Captured per iteration so each button sends its own index.
+		-- Captured per iteration so each button sends its own index. Sending the same lifeform
+		-- already held (for example reconfirming a grey pick that survived from last round) is
+		-- not special-cased here - server.lua is what turns that into a fresh confirmation.
 		local Index = i - 1
 		Menu:AddButton( Plugin.kLifeforms[ i ], Background, Highlight, TextColour, function()
 			Client.SendNetworkMessage( "LifeformPicker_Select", { lifeform = Index }, true )
@@ -246,14 +259,7 @@ function Plugin:OnLifeformPickerScoreboardKey( Scoreboard, Key, Down )
 end
 
 Client.HookNetworkMessage( "LifeformPicker_State", function( Message )
-	Selections[ Message.steamId ] = Message.lifeform
-end )
-
--- Server -> Client: forget every cached declaration. Sent when the round starts or resets, since
--- server.lua wipes its own table at those points and this is what keeps the client's copy from
--- going stale and misreporting last round's picks as current.
-Client.HookNetworkMessage( "LifeformPicker_ClearAll", function()
-	Selections = {}
+	Selections[ Message.steamId ] = { lifeform = Message.lifeform, confirmed = Message.confirmed }
 end )
 
 -- Icons are conditional, so "nothing is showing" has several possible causes that look identical
@@ -264,8 +270,11 @@ local function PrintStatus()
 	local GameInfo = GetGameInfoEntity()
 	local State = GameInfo and GameInfo:GetState()
 
-	local Count = 0
-	for _ in pairs( Selections ) do Count = Count + 1 end
+	local Total, ConfirmedCount = 0, 0
+	for _, Entry in pairs( Selections ) do
+		Total = Total + 1
+		if Entry.confirmed then ConfirmedCount = ConfirmedCount + 1 end
+	end
 
 	Print( "[LifeformPicker] hooks installed : %s", tostring( Plugin.HooksInstalled == true ) )
 	Print( "[LifeformPicker] your team       : %s (need %s alien or %s spectator)",
@@ -274,7 +283,8 @@ local function PrintStatus()
 		tostring( State ), tostring( State ~= nil and kPreRoundStates[ State ] == true ) )
 	Print( "[LifeformPicker] icons should be : %s",
 		tostring( IsPreRound() and IsLocalViewer() ) )
-	Print( "[LifeformPicker] declarations    : %d received", Count )
+	Print( "[LifeformPicker] picks remembered: %d (%d confirmed, %d grey/unconfirmed)",
+		Total, ConfirmedCount, Total - ConfirmedCount )
 end
 
 function Plugin:Initialise()

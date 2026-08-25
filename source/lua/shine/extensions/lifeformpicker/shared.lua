@@ -13,7 +13,7 @@
 -- normalise or validate the value - it cannot arrive malformed.
 
 local Plugin = Shine.Plugin( ... )
-Plugin.Version = "1.3"
+Plugin.Version = "1.4-dev"
 Plugin.NS2Only = true
 
 Plugin.PrintName = "Lifeform Picker"
@@ -32,26 +32,28 @@ Plugin.kLifeforms = { "Skulk", "Gorge", "Lerk", "Fade", "Onos" }
 -- otherwise changing your mind back to Skulk could not be replicated.
 Plugin.kDefaultLifeform = 0
 
--- Client -> Server: "I intend to play this lifeform."
+-- Client -> Server: "I intend to play this lifeform." Also how you reconfirm a pick that
+-- survived from a previous round: sending the same value again still counts as a fresh
+-- confirmation - see the guard in server.lua's OnSelect.
 -- The sender is deliberately not identified in the body; the server uses the connection it
 -- arrived on. See server.lua.
 Shared.RegisterNetworkMessage( "LifeformPicker_Select", {
 	lifeform = "integer (0 to 4)"
 } )
 
--- Server -> Client: one player's declaration. Sent only to aliens and spectators.
+-- Server -> Client: one player's current pick and whether it has been confirmed this round.
+-- Sent only to aliens and spectators.
+--
+-- A pick persists across round transitions once made - see server.lua - so this alone cannot
+-- distinguish "just declared" from "carried over from last round, not yet reconfirmed". confirmed
+-- makes that distinction explicit rather than leaving the client to guess from timing.
 --
 -- steamId is a string rather than an integer because Steam account IDs are unsigned 32-bit and
 -- large ones would wrap negative in a signed network integer.
 Shared.RegisterNetworkMessage( "LifeformPicker_State", {
 	steamId = "string (16)",
-	lifeform = "integer (0 to 4)"
+	lifeform = "integer (0 to 4)",
+	confirmed = "boolean"
 } )
-
--- Server -> Client: forget every declaration held locally. Sent when the round starts and when
--- the round resets, since server.lua wipes its own table at both points and clients otherwise
--- have no way to learn that -- their cached picks would silently survive into the next pre-round
--- and misreport as fresh declarations instead of resetting to "nobody has called anything yet".
-Shared.RegisterNetworkMessage( "LifeformPicker_ClearAll", {} )
 
 return Plugin

@@ -13,8 +13,11 @@ typing it into chat.
 - Every alien row on the scoreboard shows a lifeform icon during the pre-round.
 - Everyone starts as **Skulk**. Undeclared players show a Skulk icon.
 - Click **your own** icon on the open scoreboard to get a dropdown: Skulk, Gorge, Lerk, Fade,
-  Onos. Pick one and your icon updates for everyone who can see it.
-- Icons disappear once the round starts, and all declarations are cleared for the next one.
+  Onos. Pick one and your icon updates for everyone who can see it, tinted cream.
+- Your pick **survives round transitions**. It never gets forgotten, but a round ending un-confirms
+  it: the icon turns grey (the same shape, still your last choice) until you reconfirm it — click
+  your icon again, whether to pick the same lifeform or a different one.
+- Icons disappear once the round starts, and reappear grey next pre-round.
 
 ## When the icons appear
 
@@ -34,7 +37,8 @@ lifeformpicker_status
 ```
 
 It reports whether the scoreboard hooks installed, your team, the game state, whether icons
-*should* be showing, and how many declarations the client has received.
+*should* be showing, and how many picks the client has received — split into confirmed (cream)
+and grey (remembered but not yet reconfirmed this round).
 
 ## Who sees what
 
@@ -53,12 +57,19 @@ log out later, and your Fade is still there.
 Marines are filtered **server-side** — the data is never sent to their machine, rather than being
 sent and hidden.
 
-### Declarations reset every round
+### Picks persist, confirmation does not
 
-All declarations are cleared, and everyone's row returns to the default, both when a round
-starts and when it resets for the next one. This is broadcast to every alien and spectator
-already connected, not just applied on the server -- a client that stays on the alien team
-across a round transition still gets told the picks are gone.
+A pick is never forgotten once made — it is remembered across round transitions rather than
+reverting to the Skulk default. What resets, both when a round starts and when it resets for the
+next one, is only whether it counts as *confirmed*: the icon goes grey, keeping the same shape,
+until you actively reconfirm it.
+
+Reconfirming is the same action as declaring — click your icon and pick from the menu, including
+picking the same lifeform you already had. There is no separate "confirm" button.
+
+This reset is broadcast to every alien and spectator already connected, not just applied on the
+server — a client that stays on the alien team across a round transition still gets told which
+picks are now unconfirmed.
 
 ## Installation
 

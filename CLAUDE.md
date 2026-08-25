@@ -73,25 +73,39 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   field by design.
 - **Marines are filtered server-side**, per-client rather than broadcast. Client-side hiding would
   still put the data on their machine.
-- **State resets are broadcast, not just applied locally on the server** (1.1.1 fix).
-  `LifeformPicker_ClearAll` is sent to every eligible viewer whenever `Selections` is wiped
-  (round start, round reset). Without it, a client that never performs a team-join action
-  across a round transition keeps its stale cache forever -- `PostJoinTeam` is the only other
-  point a client learns anything, and it only fires on an actual join. This was a live,
-  invisible bug in 1.0/1.1: a stale pick and a fresh default rendered identically under the
-  single-colour design, so nothing looked wrong until 1.3 added a second colour and made a
-  stale cream icon visibly distinguishable from a correctly-reset one.
+- **A pick is sticky; only its confirmation resets** (1.4). `Selections[ steamId ]` holds the
+  lifeform value and is never wiped by a round boundary — only `ClientDisconnect` and `Cleanup`
+  remove an entry. A separate `Confirmed[ steamId ]` set tracks whether that value has been
+  actively (re)declared for the round in progress, and is cleared on `SetGameState( Started )`
+  and `OnGameReset`. `OnSelect`'s guard is `Selections[ id ] == lifeform and Confirmed[ id ]`,
+  not just an equality check — re-sending the same value you already have must still count as a
+  fresh confirmation, or clicking to reconfirm a grey pick would look like "no change" and do
+  nothing.
+- **State resets are broadcast, not just applied locally on the server.** `UnconfirmAll` re-sends
+  every remembered pick to every eligible viewer with `confirmed = false`, rather than telling
+  clients to forget anything (there is no "forget everything" message any more — see 1.3's
+  `LifeformPicker_ClearAll`, since removed; a client's copy is always either the true current
+  state or absent, never state it must specially discard). Without this broadcast, a client that
+  never performs a team-join action across a round transition keeps showing a confirmed cream icon
+  from last round forever — `PostJoinTeam` is the only other point a client learns anything, and
+  it only fires on an actual join. This was a live, invisible bug in 1.0/1.1, fixed in 1.1.1 by
+  clearing the value outright; 1.4 replaced that clear with the sticky-value/confirm-reset split
+  above so the value survives while still visually resetting.
 - **Commanders neither show an icon nor can declare** (1.1). Client checks
   `Scoreboard_GetPlayerData( idx, "IsCommander" )`; the server independently rejects with
   `Player:GetIsCommander()`, which the base class defines as `false` and `Commander` overrides.
   The rejection does **not** erase a stored declaration — it is hidden while commanding and
   returns on logout, because losing it to an accidental chair-tap would be worse. Commanders
   still *see* everyone else's icons.
-- **One flat icon colour, no declared-vs-default distinction.** An explicit product decision, not
-  an oversight. `kIconColour` is RGB 255,225,187 — the cream of Hatta's *Lifeform Selector*, which
+- **Two icon colours: grey for unconfirmed, cream for confirmed** (1.3, meaning shifted in 1.4).
+  `kIconColourConfirmed` is RGB 255,225,187 — the cream of Hatta's *Lifeform Selector*, which
   never tinted anything (it applied a no-op `Color(1,1,1,1)`) and simply inherited the baked
   colour of the vanilla `ui/alien_hivestatus_commicons.dds` it drew from. Our source art is pure
   white, so `SetColor` reproduces that hue exactly and any other is a one-line change.
+  `kIconColourUnconfirmed` is RGB 96,96,96, matching `kEalInactiveColor`'s convention from
+  Enhanced Scoreboard / Shimizu Scoreboard. Originally (1.3) grey meant "never declared"; as of
+  1.4 it means "not confirmed for this round", which includes a value carried over from a
+  previous one — the shape can be non-default while the colour is still grey.
 - **The atlas is Devnull's artwork**, from Enhanced Scoreboard (workshop 2597529958,
   ui/Devnull/Alien.dds). Shimizu Scoreboard ships a byte-identical copy and is where ours was
   taken from, but credit belongs to Devnull. Verified by md5.
@@ -136,3 +150,8 @@ Useful checks in-game:
 - Switching teams mid-pre-round does not leave a stale icon on the recycled row.
 - The alien commander has no icon on their own row but still sees everyone else's.
 - A declaration made before taking the chair reappears after logging out of it.
+- A confirmed (cream) pick turns grey, same shape, when the round starts or resets — it does not
+  revert to the Skulk default.
+- Clicking your own grey icon and picking the *same* lifeform turns it cream again (the "re-send
+  the same value still confirms" guard in `OnSelect`).
+- A player who never declares still defaults to grey Skulk, unchanged from 1.3.
