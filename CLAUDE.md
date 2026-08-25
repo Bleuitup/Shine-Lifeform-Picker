@@ -106,9 +106,12 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   Enhanced Scoreboard / Shimizu Scoreboard. Originally (1.3) grey meant "never declared"; as of
   1.4 it means "not confirmed for this round", which includes a value carried over from a
   previous one — the shape can be non-default while the colour is still grey.
-- **The atlas is Devnull's artwork**, from Enhanced Scoreboard (workshop 2597529958,
-  ui/Devnull/Alien.dds). Shimizu Scoreboard ships a byte-identical copy and is where ours was
-  taken from, but credit belongs to Devnull. Verified by md5.
+- **The atlas is a set of vanilla lifeform icons**, sourced via Shimizu Scoreboard
+  (ui/ShimizuScoreboard/Alien.dds), used with Shimizu's permission. The same file also ships in
+  Devnull's Enhanced Scoreboard (workshop 2597529958, ui/Devnull/Alien.dds) - both point back to
+  the same underlying vanilla asset rather than either having copied the other. Verified
+  byte-identical by md5, which is only noted here to confirm which bytes this crop is derived
+  from.
 - **Prowler is excluded.** The atlas was cropped to just the five vanilla rows (340x570); the
   source had eleven more. Cropping from the bottom keeps rows 0-4 at identical coordinates, so no
   Lua changed. Regenerate mips alpha-weighted if it is ever recut - transparent areas are RGB

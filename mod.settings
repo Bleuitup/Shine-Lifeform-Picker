@@ -37,9 +37,9 @@ The icons appear only before the round starts, and disappear the moment it begin
 
 [h1]Credits[/h1]
 
-The idea, and the click-your-icon-for-a-menu interaction, come from Hatta's discontinued [i]Shine - Lifeform Selector[/i].
+The idea, and the click-your-icon-for-a-menu interaction, come from Hatta's discontinued [i]Shine - Lifeform Selector[/i], used with his permission.
 
-The lifeform artwork is [b]Devnull's[/b], from [i]Enhanced Scoreboard[/i]. It reached this mod by way of [i]Shimizu Scoreboard[/i], which ships a byte-identical copy, but it originates with Devnull.
+The lifeform artwork .dds file with the vanilla icons comes from [i]Shimizu Scoreboard[/i], used with his permission.
 
 This is an independent implementation rather than a fork of any of them.
 
