@@ -133,7 +133,10 @@ Facts verified against the game source; they are easy to get wrong from memory.
   the name.
 - `GUIHoverMenu` is a **singleton shared with vanilla** (`CreateGUIScriptSingle`). `AddButton`
   calls `AdjustMenuSize` itself, but `Show()` positions from the background's current size — so
-  `Show()` must come *after* the buttons are added.
+  `Show()` must come *after* the buttons are added. `callback` is optional; an `AddButton` call
+  with no callback (a transparent bg/highlight, e.g. `Color(0,0,0,0)`) renders as a non-clickable
+  title row, since `GUIHoverMenu:SendKeyEvent` only fires entries that have one — used for the
+  "Planned Lifeform" header, the same idiom Shimizu Scoreboard uses for its own lifeform menu.
 - `GetSteamIdForClientIndex` returns **nil** until the player's `PlayerInfoEntity` has replicated.
 - `GUIItem.SetTextureCoordinates` accepts either four numbers or a 4-element array table
   (patched in `GUI/GUIItemExtras.lua`).

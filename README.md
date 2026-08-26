@@ -12,8 +12,9 @@ typing it into chat.
 
 - Every alien row on the scoreboard shows a lifeform icon during the pre-round.
 - Everyone starts as **Skulk**. Undeclared players show a Skulk icon.
-- Click **your own** icon on the open scoreboard to get a dropdown: Skulk, Gorge, Lerk, Fade,
-  Onos. Pick one and your icon updates for everyone who can see it, tinted cream.
+- Click **your own** icon on the open scoreboard to get a "Planned Lifeform" dropdown: Skulk,
+  Gorge, Lerk, Fade, Onos. Pick one and your icon updates for everyone who can see it, tinted
+  cream.
 - Your pick **survives round transitions**. It never gets forgotten, but a round ending un-confirms
   it: the icon turns grey (the same shape, still your last choice) until you reconfirm it — click
   your icon again, whether to pick the same lifeform or a different one.

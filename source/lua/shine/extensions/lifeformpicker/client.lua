@@ -191,6 +191,12 @@ local function ShowLifeformMenu( Scoreboard )
 
 	Menu:ResetButtons()
 
+	-- A non-interactive title row, the same idiom Shimizu Scoreboard uses for its own lifeform
+	-- menu: transparent background and highlight so it never looks clickable, and no callback
+	-- so GUIHoverMenu's click handling skips it (only AddButton entries with a callback fire
+	-- when clicked, per GUIHoverMenu:SendKeyEvent).
+	Menu:AddButton( "Planned Lifeform", Color( 0, 0, 0, 0 ), Color( 0, 0, 0, 0 ), TextColour )
+
 	for i = 1, #Plugin.kLifeforms do
 		-- Captured per iteration so each button sends its own index. Sending the same lifeform
 		-- already held (for example reconfirming a grey pick that survived from last round) is
