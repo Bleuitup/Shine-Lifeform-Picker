@@ -171,10 +171,13 @@ All in `client.lua`:
 |---|---|---|
 | `kIconHeight` | `19` | Icon height. `kIconWidth` must stay at ~1.474x this to keep the aspect. |
 | `kIconWidth` | `28` | Icon width. |
-| `kIconGap` | `4` | Gap between the icon and the Status column. |
+| `kIconGap` | `4` | Gap between the icon and the Status column's right edge. |
 
-The icon is positioned off the Status column's own position rather than from hard-coded column
-maths, so it follows resolution and scoreboard-width changes without adjustment.
+The icon is a direct child of the Status column's own GUI item rather than positioned from
+hard-coded column maths, so it tracks Status through the engine's own transform hierarchy and
+follows resolution and scoreboard-width changes without adjustment. It sits to Status's **right**
+so it does not collide with mods (such as Enhanced Scoreboard) that draw their own icons to the
+left of it.
 
 ## Credits
 

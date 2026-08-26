@@ -106,6 +106,12 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   Enhanced Scoreboard / Shimizu Scoreboard. Originally (1.3) grey meant "never declared"; as of
   1.4 it means "not confirmed for this round", which includes a value carried over from a
   previous one — the shape can be non-default while the colour is still grey.
+- **The icon is a child of `PlayerItem.Status`, anchored to its right edge** (1.4, on Devnull's
+  suggestion). Originally it was a child of `PlayerItem.Background`, positioned to Status's
+  *left* by reading `Status:GetPosition()` every frame. Enhanced Scoreboard draws its own
+  upgrade icons immediately left of Status, which collided with that placement. Reparenting to
+  Status directly also means position now tracks it through the engine's transform hierarchy
+  rather than a per-frame read-and-recompute.
 - **The atlas is a set of vanilla lifeform icons**, sourced via Shimizu Scoreboard
   (ui/ShimizuScoreboard/Alien.dds), used with Shimizu's permission. The same file also ships in
   Devnull's Enhanced Scoreboard (workshop 2597529958, ui/Devnull/Alien.dds) - both point back to
@@ -161,3 +167,10 @@ Useful checks in-game:
 - Clicking your own grey icon and picking the *same* lifeform turns it cream again (the "re-send
   the same value still confirms" guard in `OnSelect`).
 - A player who never declares still defaults to grey Skulk, unchanged from 1.3.
+- The icon sits to the **right** of the Status column, vertically aligned with it, and does not
+  overlap Status's own text or (with Enhanced Scoreboard installed) its upgrade icons to the
+  left. The vertical offset (`-kIconHeight * Scale`, a full height rather than the half-height
+  used pre-1.4's repositioning) came from Devnull rather than being derived here — confirm it
+  actually centres against Status's own height before assuming it is correct.
+- Opening the menu shows a **"Planned Lifeform"** title row above the five lifeform buttons, and
+  clicking that row does nothing (it has no callback).

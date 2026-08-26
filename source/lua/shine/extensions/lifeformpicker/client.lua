@@ -101,13 +101,19 @@ local function EnsureIcon( PlayerItem )
 	if Icon then return Icon end
 
 	Icon = GUIManager:CreateGraphicItem()
-	Icon:SetAnchor( GUIItem.Left, GUIItem.Center )
+	-- Anchored to the Status text item's own right edge, and parented to it directly rather than
+	-- to the row background, on Devnull's suggestion: mods such as Enhanced Scoreboard draw
+	-- their own upgrade icons to the left of Status, which collided with this icon's previous
+	-- left-of-Status position. Parenting under Status also means the icon now tracks Status's
+	-- position through the engine's own transform hierarchy rather than being repositioned every
+	-- frame from a read of it.
+	Icon:SetAnchor( GUIItem.Right, GUIItem.Center )
 	Icon:SetTexture( kAtlas )
 	-- No SetColor here: confirmed-vs-not can change every frame (a pick lands, a round resets),
 	-- so the colour is set on every render pass below instead of once at creation.
 	Icon:SetStencilFunc( GUIItem.NotEqual )
 	Icon:SetIsVisible( false )
-	PlayerItem.Background:AddChild( Icon )
+	PlayerItem.Status:AddChild( Icon )
 
 	PlayerItem.LifeformPickerIcon = Icon
 	return Icon
@@ -162,13 +168,11 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 				local Index = GetLifeformFor( PlayerItem.ClientIndex )
 				local Confirmed = IsConfirmed( PlayerItem.ClientIndex )
 
-				-- Positioned off the Status column rather than from hard-coded column maths, so
-				-- it tracks resolution changes and scoreboard width changes on its own.
-				local StatusPos = PlayerItem.Status:GetPosition()
-
+				-- kIconGap here is purely local to Status now that the icon is parented to it -
+				-- no need to read Status's own position, since the anchor already places the
+				-- icon at Status's right edge and this offset only nudges it clear of that edge.
 				Icon:SetSize( Vector( kIconWidth, kIconHeight, 0 ) * Scale )
-				Icon:SetPosition( Vector( StatusPos.x - ( kIconWidth + kIconGap ) * Scale,
-					-kIconHeight * 0.5 * Scale, 0 ) )
+				Icon:SetPosition( Vector( kIconGap * Scale, -kIconHeight * Scale, 0 ) )
 				Icon:SetTexturePixelCoordinates( kCropLeft, kCellHeight * Index,
 					kCropRight, kCellHeight * ( Index + 1 ) )
 				Icon:SetColor( Confirmed and kIconColourConfirmed or kIconColourUnconfirmed )
