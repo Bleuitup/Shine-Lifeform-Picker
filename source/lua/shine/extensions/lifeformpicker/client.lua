@@ -68,9 +68,11 @@ local kPreRoundStates = {
 -- lifeform rather than showing a remembered one.
 local Selections = {}
 
--- The exact text we last set on the shared tooltip (see below), so we can tell whether it still
--- belongs to us before hiding it.
-local LastTooltipText = nil
+-- Our own private GUIHoverTooltip instance, plus the state needed to avoid redundant work on it.
+-- Created lazily by GetTooltip() below; destroyed in Cleanup.
+local Tooltip = nil
+local TooltipText = nil
+local TooltipShown = false
 
 local function IsPreRound()
 	local GameInfo = GetGameInfoEntity()
@@ -98,6 +100,34 @@ end
 local function IsConfirmed( ClientIndex )
 	local Entry = Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ]
 	return Entry ~= nil and Entry.confirmed == true
+end
+
+-- A GUIHoverTooltip of our own, deliberately NOT vanilla's shared Scoreboard.badgeNameTooltip.
+--
+-- Sharing that one does not work. Vanilla's per-row hover logic calls badgeNameTooltip:Hide()
+-- every frame the cursor is inside a player row but not over a badge or the skill icon - which is
+-- precisely the case when it is over our icon, since our icon lives inside that row. Our hook runs
+-- PassivePost, so every frame became: vanilla Hide() destroys the fade-in animation and starts a
+-- fade-out, then our Show() destroys that and restarts a 0.25s fade-in *from the current partial
+-- alpha*. Restarting an ease-to-target every frame from wherever it got to approaches full opacity
+-- asymptotically, which is why the tooltip appeared to crawl into view rather than fading in.
+--
+-- CreateGUIScript (as opposed to CreateGUIScriptSingle, which returns the shared singleton) hands
+-- back a fresh instance, registered with the GUI manager so its own Update runs - which is what
+-- makes it follow the cursor and flip near screen edges. Vanilla drives its tooltip, we drive
+-- ours, and neither touches the other's animations.
+local function GetTooltip()
+	if not Tooltip then
+		Tooltip = GetGUIManager():CreateGUIScript( "menu/GUIHoverTooltip" )
+	end
+	return Tooltip
+end
+
+local function HideTooltip()
+	if Tooltip and TooltipShown then
+		Tooltip:Hide()
+		TooltipShown = false
+	end
 end
 
 local function EnsureIcon( PlayerItem )
@@ -148,16 +178,10 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 	local Show = IsPreRound() and IsLocalViewer()
 	local Scale = GUIScoreboard.kScalingFactor
 
-	-- Hovering an icon shows its lifeform in the same shared tooltip vanilla uses for the comm
-	-- badge, playtester badge, and skill icon (GUIHoverTooltip, exposed here as
-	-- Scoreboard.badgeNameTooltip). This hook runs PassivePost, strictly after the vanilla
-	-- Update that owns that tooltip has already run its own hover checks for every row's badges
-	-- this frame - so only one icon can plausibly be hovered at a time, but whichever call runs
-	-- last wins the shared widget for that frame, and ours always runs last. Show()ing when we
-	-- are hovered is safe either way; Hide()ing is not, unless we first confirm the tooltip is
-	-- still showing text we set - otherwise, hovering a badge after we last hovered our own icon
-	-- would have this hook wipe out that badge's tooltip.
-	local CanShowTooltip = Show and Scoreboard.badgeNameTooltip and MouseTracker_GetIsVisible()
+	-- Hovering an icon shows its lifeform in a GUIHoverTooltip of our own (see GetTooltip), styled
+	-- exactly like the comm badge / playtester badge / skill icon tooltips because it is the same
+	-- widget class - just not the same instance vanilla drives.
+	local CanShowTooltip = Show and MouseTracker_GetIsVisible()
 		and not Scoreboard.hoverMenu.background:GetIsVisible() and not MainMenu_GetIsOpened()
 	local MouseX, MouseY
 	if CanShowTooltip then
@@ -211,13 +235,24 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 
 	if HoveredIndex ~= nil then
 		local Text = string.format( "Planned Lifeform: %s", Plugin.kLifeforms[ HoveredIndex + 1 ] )
-		Scoreboard.badgeNameTooltip:SetText( Text )
-		Scoreboard.badgeNameTooltip:Show()
-		LastTooltipText = Text
-	elseif LastTooltipText ~= nil
-	and Scoreboard.badgeNameTooltip.tooltip:GetText() == LastTooltipText then
-		Scoreboard.badgeNameTooltip:Hide()
-		LastTooltipText = nil
+		local ThisTooltip = GetTooltip()
+
+		-- SetText re-runs word wrapping and resizes the background, so only call it when the text
+		-- actually changed (moving between two icons showing different lifeforms).
+		if TooltipText ~= Text then
+			ThisTooltip:SetText( Text )
+			TooltipText = Text
+		end
+
+		-- Likewise only Show on the transition. Show() is guarded internally against restarting a
+		-- running TOOLTIP_SHOW animation, so calling it every frame would be harmless now that
+		-- nothing interleaves a Hide() - but there is no reason to.
+		if not TooltipShown then
+			ThisTooltip:Show()
+			TooltipShown = true
+		end
+	else
+		HideTooltip()
 	end
 end
 
@@ -257,6 +292,10 @@ local function ShowLifeformMenu( Scoreboard )
 	if Scoreboard.badgeNameTooltip then
 		Scoreboard.badgeNameTooltip:Hide( 0 )
 	end
+
+	-- Ours too: the menu opens over the icon that was being hovered, and waiting for the next
+	-- update pass to notice would leave the tooltip visible under it for a frame.
+	HideTooltip()
 end
 
 -- Hooked as ActivePre (see CallAfterFileLoad above): returning a non-nil value skips vanilla's
@@ -347,6 +386,16 @@ end
 
 function Plugin:Cleanup()
 	Selections = {}
+
+	-- Ours to create, ours to destroy - unlike the shared singleton, nothing else will clean this
+	-- up if the plugin is disabled or reloaded.
+	if Tooltip then
+		GetGUIManager():DestroyGUIScript( Tooltip )
+		Tooltip = nil
+	end
+	TooltipText = nil
+	TooltipShown = false
+
 	self.BaseClass.Cleanup( self )
 end
 

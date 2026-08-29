@@ -112,18 +112,19 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   upgrade icons immediately left of Status, which collided with that placement. Reparenting to
   Status directly also means position now tracks it through the engine's transform hierarchy
   rather than a per-frame read-and-recompute.
-- **The icon's hover tooltip reuses vanilla's shared `badgeNameTooltip` widget** (1.41) rather
-  than creating a second one. It is a genuine shared-mutable-state hazard: our hook runs
-  `PassivePost`, strictly after the vanilla `Update` that drives that same widget for the comm
-  badge, playtester badge, and skill icon, so whichever of us calls `Show`/`Hide`/`SetText` last
-  in a frame wins the widget outright — there is no isolation between us and vanilla's own hover
-  logic. `Show`ing when our icon is hovered is safe regardless; blindly `Hide`ing when it is not
-  would occasionally cancel a badge tooltip vanilla legitimately showed the same frame (e.g. the
-  cursor moves off our icon and onto a badge on another row in one frame — vanilla's `UpdateTeam`
-  already ran and called `Show()` with the badge's text before our hook gets to run). The fix is
-  `LastTooltipText`: we only call `Hide()` when the tooltip is still showing the exact text we
-  last set, confirmed via `Scoreboard.badgeNameTooltip.tooltip:GetText()` — if something else
-  claimed it since, we leave it alone.
+- **The icon's hover tooltip is our own `GUIHoverTooltip` instance, never vanilla's shared
+  `badgeNameTooltip`** (1.41). Sharing it does not work, and the failure is subtle rather than
+  loud. Vanilla's per-row hover logic calls `badgeNameTooltip:Hide()` **every frame** the cursor
+  is inside a player row but not over a badge or the skill icon — exactly our case, since the
+  icon lives inside that row. Our hook runs `PassivePost`, so each frame became: vanilla `Hide()`
+  destroys the fade-in animation and starts a fade-out, then our `Show()` destroys that and
+  restarts a 0.25s fade-in *from the current partial alpha*. Restarting an ease-to-target every
+  frame from wherever it reached approaches full opacity asymptotically, so the tooltip crawled
+  into view over several seconds instead of fading in. `GetGUIManager():CreateGUIScript(...)`
+  (as opposed to `CreateGUIScriptSingle`, which returns the shared singleton) gives a private
+  instance, registered with the GUI manager so its own `Update` still runs. **Do not "simplify"
+  this back to `Scoreboard.badgeNameTooltip`.** Being ours also means `Hide()` is unconditionally
+  safe — it can never cancel a badge tooltip vanilla is legitimately showing.
 - **The atlas is a set of vanilla lifeform icons**, sourced via Shimizu Scoreboard
   (ui/ShimizuScoreboard/Alien.dds), used with Shimizu's permission. The same file also ships in
   Devnull's Enhanced Scoreboard (workshop 2597529958, ui/Devnull/Alien.dds) - both point back to
@@ -155,14 +156,17 @@ Facts verified against the game source; they are easy to get wrong from memory.
   with no callback (a transparent bg/highlight, e.g. `Color(0,0,0,0)`) renders as a non-clickable
   title row, since `GUIHoverMenu:SendKeyEvent` only fires entries that have one — used for the
   "Planned Lifeform" header, the same idiom Shimizu Scoreboard uses for its own lifeform menu.
-- `Scoreboard.badgeNameTooltip` is a **singleton shared with vanilla**
-  (`CreateGUIScriptSingle("menu/GUIHoverTooltip")`), the same widget behind the comm badge,
-  playtester badge, and skill icon tooltips. API: `SetText(string)`, `Show(displayTime?)` (omit
-  `displayTime` to show until explicitly hidden), `Hide(hideTime?)` (fades out; `Hide(0)` is
-  instant, used when opening the pick menu). The text itself lives on `.tooltip`, a normal
-  `GUIItem` — `.tooltip:GetText()` works, which is how we detect whether it is still showing text
-  we set before deciding it is safe to `Hide()`. It follows the cursor and flips sides near
-  screen edges entirely on its own; no positioning code is needed.
+- `GUIHoverTooltip` (`menu/GUIHoverTooltip.lua`) is the widget behind the comm badge, playtester
+  badge and skill icon tooltips. API: `SetText(string)` (re-runs word wrap and resizes, so avoid
+  calling it per frame), `Show(displayTime?)` (omit `displayTime` to show until explicitly
+  hidden), `Hide(hideTime?)` (fades out over 0.25s; `Hide(0)` is instant). It follows the cursor
+  and flips sides near screen edges on its own — no positioning code needed.
+  **Both `Show` and `Hide` destroy the other's animation before starting their own**, so two
+  callers alternating on one instance will starve the fade; see the tooltip design note above.
+  `GetGUIManager():CreateGUIScript(path)` creates an independent instance (registered so its
+  `Update` runs), `CreateGUIScriptSingle(path)` returns the process-wide shared one, and
+  `DestroyGUIScript(instance)` tears one down — a privately created instance must be destroyed in
+  `Plugin:Cleanup`, since nothing else owns it.
 - `GetSteamIdForClientIndex` returns **nil** until the player's `PlayerInfoEntity` has replicated.
 - `GUIItem.SetTextureCoordinates` accepts either four numbers or a 4-element array table
   (patched in `GUI/GUIItemExtras.lua`).
@@ -194,12 +198,11 @@ Useful checks in-game:
   actually centres against Status's own height before assuming it is correct.
 - Opening the menu shows a **"Planned Lifeform"** title row above the five lifeform buttons, and
   clicking that row does nothing (it has no callback).
-- Hovering a lifeform icon shows a "Planned Lifeform: X" tooltip that follows the cursor and
-  disappears when the cursor leaves the icon.
-- **The important one:** with a mod that has its own scoreboard tooltips (badges, skill icon —
-  vanilla itself qualifies), hover a badge, then move the cursor directly onto a lifeform icon,
-  then back onto a *different row's* badge, watching closely each time the cursor crosses from
-  our icon onto vanilla's territory. The badge tooltip must reappear correctly and must not be
-  left stuck hidden or showing stale lifeform text — this is exactly the shared-widget race
-  described in "Design decisions" above, and the one scenario that could not be verified without
-  a live client.
+- Hovering a lifeform icon shows a "Planned Lifeform: X" tooltip that follows the cursor,
+  **fades in promptly** (roughly a quarter second — not a slow crawl; a crawl means something is
+  fighting the animation again, see the tooltip design note), and disappears on leaving the icon.
+- Moving the cursor directly between two icons showing *different* lifeforms updates the text.
+- Hovering a badge or the skill icon still shows vanilla's own tooltip normally, and crossing
+  back and forth between a badge and a lifeform icon leaves neither stuck visible.
+- Opening the pick menu while hovering an icon hides the tooltip immediately rather than leaving
+  it under the menu for a frame.
