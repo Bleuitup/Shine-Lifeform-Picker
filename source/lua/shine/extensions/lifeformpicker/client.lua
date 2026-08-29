@@ -68,6 +68,10 @@ local kPreRoundStates = {
 -- lifeform rather than showing a remembered one.
 local Selections = {}
 
+-- The exact text we last set on the shared tooltip (see below), so we can tell whether it still
+-- belongs to us before hiding it.
+local LastTooltipText = nil
+
 local function IsPreRound()
 	local GameInfo = GetGameInfoEntity()
 	return GameInfo ~= nil and kPreRoundStates[ GameInfo:GetState() ] == true
@@ -144,6 +148,23 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 	local Show = IsPreRound() and IsLocalViewer()
 	local Scale = GUIScoreboard.kScalingFactor
 
+	-- Hovering an icon shows its lifeform in the same shared tooltip vanilla uses for the comm
+	-- badge, playtester badge, and skill icon (GUIHoverTooltip, exposed here as
+	-- Scoreboard.badgeNameTooltip). This hook runs PassivePost, strictly after the vanilla
+	-- Update that owns that tooltip has already run its own hover checks for every row's badges
+	-- this frame - so only one icon can plausibly be hovered at a time, but whichever call runs
+	-- last wins the shared widget for that frame, and ours always runs last. Show()ing when we
+	-- are hovered is safe either way; Hide()ing is not, unless we first confirm the tooltip is
+	-- still showing text we set - otherwise, hovering a badge after we last hovered our own icon
+	-- would have this hook wipe out that badge's tooltip.
+	local CanShowTooltip = Show and Scoreboard.badgeNameTooltip and MouseTracker_GetIsVisible()
+		and not Scoreboard.hoverMenu.background:GetIsVisible() and not MainMenu_GetIsOpened()
+	local MouseX, MouseY
+	if CanShowTooltip then
+		MouseX, MouseY = Client.GetCursorPosScreen()
+	end
+	local HoveredIndex = nil
+
 	for i = 1, #Scoreboard.teams do
 		local Team = Scoreboard.teams[ i ]
 		local IsAlienTeam = Team.TeamNumber == kTeam2Index
@@ -177,10 +198,26 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 					kCropRight, kCellHeight * ( Index + 1 ) )
 				Icon:SetColor( Confirmed and kIconColourConfirmed or kIconColourUnconfirmed )
 				Icon:SetIsVisible( true )
+
+				if CanShowTooltip and HoveredIndex == nil
+				and GUIItemContainsPoint( Icon, MouseX, MouseY ) then
+					HoveredIndex = Index
+				end
 			else
 				Icon:SetIsVisible( false )
 			end
 		end
+	end
+
+	if HoveredIndex ~= nil then
+		local Text = string.format( "Planned Lifeform: %s", Plugin.kLifeforms[ HoveredIndex + 1 ] )
+		Scoreboard.badgeNameTooltip:SetText( Text )
+		Scoreboard.badgeNameTooltip:Show()
+		LastTooltipText = Text
+	elseif LastTooltipText ~= nil
+	and Scoreboard.badgeNameTooltip.tooltip:GetText() == LastTooltipText then
+		Scoreboard.badgeNameTooltip:Hide()
+		LastTooltipText = nil
 	end
 end
 

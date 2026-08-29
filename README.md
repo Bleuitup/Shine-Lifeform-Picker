@@ -19,6 +19,8 @@ typing it into chat.
   it: the icon turns grey (the same shape, still your last choice) until you reconfirm it — click
   your icon again, whether to pick the same lifeform or a different one.
 - Icons disappear once the round starts, and reappear grey next pre-round.
+- Hovering **any** icon shows a tooltip — "Planned Lifeform: Lerk" — the same style NS2 uses for
+  the comm badge, playtester badge, and skill icon on the scoreboard.
 
 ## When the icons appear
 

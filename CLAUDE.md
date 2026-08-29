@@ -112,6 +112,18 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   upgrade icons immediately left of Status, which collided with that placement. Reparenting to
   Status directly also means position now tracks it through the engine's transform hierarchy
   rather than a per-frame read-and-recompute.
+- **The icon's hover tooltip reuses vanilla's shared `badgeNameTooltip` widget** (1.41) rather
+  than creating a second one. It is a genuine shared-mutable-state hazard: our hook runs
+  `PassivePost`, strictly after the vanilla `Update` that drives that same widget for the comm
+  badge, playtester badge, and skill icon, so whichever of us calls `Show`/`Hide`/`SetText` last
+  in a frame wins the widget outright — there is no isolation between us and vanilla's own hover
+  logic. `Show`ing when our icon is hovered is safe regardless; blindly `Hide`ing when it is not
+  would occasionally cancel a badge tooltip vanilla legitimately showed the same frame (e.g. the
+  cursor moves off our icon and onto a badge on another row in one frame — vanilla's `UpdateTeam`
+  already ran and called `Show()` with the badge's text before our hook gets to run). The fix is
+  `LastTooltipText`: we only call `Hide()` when the tooltip is still showing the exact text we
+  last set, confirmed via `Scoreboard.badgeNameTooltip.tooltip:GetText()` — if something else
+  claimed it since, we leave it alone.
 - **The atlas is a set of vanilla lifeform icons**, sourced via Shimizu Scoreboard
   (ui/ShimizuScoreboard/Alien.dds), used with Shimizu's permission. The same file also ships in
   Devnull's Enhanced Scoreboard (workshop 2597529958, ui/Devnull/Alien.dds) - both point back to
@@ -143,6 +155,14 @@ Facts verified against the game source; they are easy to get wrong from memory.
   with no callback (a transparent bg/highlight, e.g. `Color(0,0,0,0)`) renders as a non-clickable
   title row, since `GUIHoverMenu:SendKeyEvent` only fires entries that have one — used for the
   "Planned Lifeform" header, the same idiom Shimizu Scoreboard uses for its own lifeform menu.
+- `Scoreboard.badgeNameTooltip` is a **singleton shared with vanilla**
+  (`CreateGUIScriptSingle("menu/GUIHoverTooltip")`), the same widget behind the comm badge,
+  playtester badge, and skill icon tooltips. API: `SetText(string)`, `Show(displayTime?)` (omit
+  `displayTime` to show until explicitly hidden), `Hide(hideTime?)` (fades out; `Hide(0)` is
+  instant, used when opening the pick menu). The text itself lives on `.tooltip`, a normal
+  `GUIItem` — `.tooltip:GetText()` works, which is how we detect whether it is still showing text
+  we set before deciding it is safe to `Hide()`. It follows the cursor and flips sides near
+  screen edges entirely on its own; no positioning code is needed.
 - `GetSteamIdForClientIndex` returns **nil** until the player's `PlayerInfoEntity` has replicated.
 - `GUIItem.SetTextureCoordinates` accepts either four numbers or a 4-element array table
   (patched in `GUI/GUIItemExtras.lua`).
@@ -174,3 +194,12 @@ Useful checks in-game:
   actually centres against Status's own height before assuming it is correct.
 - Opening the menu shows a **"Planned Lifeform"** title row above the five lifeform buttons, and
   clicking that row does nothing (it has no callback).
+- Hovering a lifeform icon shows a "Planned Lifeform: X" tooltip that follows the cursor and
+  disappears when the cursor leaves the icon.
+- **The important one:** with a mod that has its own scoreboard tooltips (badges, skill icon —
+  vanilla itself qualifies), hover a badge, then move the cursor directly onto a lifeform icon,
+  then back onto a *different row's* badge, watching closely each time the cursor crosses from
+  our icon onto vanilla's territory. The badge tooltip must reappear correctly and must not be
+  left stuck hidden or showing stale lifeform text — this is exactly the shared-widget race
+  described in "Design decisions" above, and the one scenario that could not be verified without
+  a live client.
