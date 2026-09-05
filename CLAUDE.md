@@ -73,6 +73,33 @@ runtime layers cleanly on top. **Do not convert this to a file hook.**
   field by design.
 - **Marines are filtered server-side**, per-client rather than broadcast. Client-side hiding would
   still put the data on their machine.
+- **`DisplayMode` is the only server setting** (1.42), and the plugin had none before it — going
+  from `HasConfig = false` to a real config is why `LifeformPicker.json` appears. Values are
+  `0` PregameOnly (default, the 1.0–1.41 behaviour), `1` UntilFirstLifeform, `2` FullGame.
+  `CheckConfigTypes` catches a non-number but not a number outside 0–2, so `Initialise` range
+  checks it and falls back to 0 with a printed warning.
+  All display logic is client side, so the mode has to be **replicated**: sent on `ClientConnect`,
+  again inside `SendAllTo` (so a team join re-syncs it), and to every connected client from
+  `Initialise` — that last one exists for `sh_reloadplugin`, after which nobody would otherwise
+  learn the mode changed. Clients default to `PregameOnly` until told, which shows the least.
+- **Evolution is polled, not hooked** (1.42). The moment a gestation completes is inside
+  `UpdateGestation`, a **file-local** in `Embryo.lua` — nothing to hook. `Player:Replace` is
+  reachable but also fires for team changes and respawns, so it would need filtering by resulting
+  class anyway. A 1-second timer reading `Player:GetClassName()` against a Gorge/Lerk/Fade/Onos
+  map is immune to however NS2 arranges gestation internally, and a second of latency is
+  irrelevant for a scoreboard icon. The timer is only created when `DisplayMode ~= 0`, since
+  PregameOnly never reads `evolved`. `CreateTimer` registers it with the plugin, so the base
+  `Cleanup` destroys it — do not add manual teardown.
+- **`evolved` is only ever set, never cleared on the way back down** (1.42). That single property
+  is what makes mode 1's hide a *latch* (dying back to Skulk does not bring the icon back) and
+  what makes mode 2 keep showing the last lifeform actually reached. It is cleared for everyone
+  only when the round ends. Both behaviours were explicit product choices — do not "fix" this
+  into a live reading of current class.
+- **Round state resets on round *end*, not round start** (1.42, changed from 1.4). Modes 1 and 2
+  keep icons up into the round, so greying every confirmed pick at `kGameState.Started` would
+  destroy the information exactly when those modes exist to show it. `SetGameState` now resets on
+  `Team1Won` / `Team2Won` / `Draw`, plus `OnGameReset`. In PregameOnly the icons vanish at
+  `Started` anyway, so this is invisible there.
 - **A pick is sticky; only its confirmation resets** (1.4). `Selections[ steamId ]` holds the
   lifeform value and is never wiped by a round boundary — only `ClientDisconnect` and `Cleanup`
   remove an entry. A separate `Confirmed[ steamId ]` set tracks whether that value has been
@@ -179,15 +206,42 @@ There is **no standalone Lua interpreter available** on the usual dev machine, a
 suite only runs inside an NS2 server. Changes must be verified in-game. Do not claim a change is
 tested unless it was actually run in-game.
 
-Useful checks in-game:
+Every check below is per `DisplayMode` — the config now changes behaviour substantially, so a
+pass in mode 0 says nothing about modes 1 and 2. Test each mode you intend to ship.
+
+**DisplayMode 0 (default) — should behave exactly as 1.41 did.** This is the regression check
+that matters most, since every existing server gets this mode:
 - Icons appear for aliens pre-round, and vanish the moment the round starts.
+- Clicking an icon mid-round does nothing (no menu opens).
+
+**DisplayMode 1:**
+- Icons carry past the round starting, still cream if confirmed pre-round (they should *not* grey
+  out at round start any more).
+- A player's icon disappears when they evolve to Gorge/Lerk/Fade/Onos — within about a second,
+  since evolution is polled.
+- It stays gone after they die back to a Skulk, and only returns next round. That latch is the
+  behaviour that would break if the poll ever cleared `evolved`.
+
+**DisplayMode 2:**
+- Picks can be changed mid-round; the menu still opens during the round.
+- On evolving, the icon switches to the lifeform actually reached and goes grey — including when
+  that differs from what was picked (pick Fade, get Lerk, expect a grey Lerk).
+- Hovering that icon says **"Evolved: Lerk"**, not "Planned Lifeform: Lerk".
+- After dying back to a Skulk it keeps showing that lifeform, grey, rather than reverting.
+
+**All modes:**
+- `sh_reloadplugin lifeformpicker` after editing `DisplayMode` updates already-connected clients
+  without needing a reconnect (`lifeformpicker_status` reports the mode).
+- An out-of-range `DisplayMode` (e.g. `7`) falls back to 0 with a warning rather than misbehaving.
+- Round ending resets confirmations and evolutions for everyone.
 - A marine on the same server never receives declarations (verify server-side, not just visually).
 - Clicking your own icon opens the menu **at the cursor**; clicking another player's does not.
 - Switching teams mid-pre-round does not leave a stale icon on the recycled row.
 - The alien commander has no icon on their own row but still sees everyone else's.
 - A declaration made before taking the chair reappears after logging out of it.
-- A confirmed (cream) pick turns grey, same shape, when the round starts or resets — it does not
-  revert to the Skulk default.
+- A confirmed (cream) pick turns grey, same shape, when the round **ends** — it does not revert
+  to the Skulk default. (In mode 0 this is indistinguishable from resetting at round start, since
+  the icons are hidden throughout the round either way.)
 - Clicking your own grey icon and picking the *same* lifeform turns it cream again (the "re-send
   the same value still confirms" guard in `OnSelect`).
 - A player who never declares still defaults to grey Skulk, unchanged from 1.3.

@@ -20,7 +20,7 @@ Open the scoreboard during the pre-round, click the lifeform icon on your own ro
 
 Hovering any icon names the lifeform it shows — "Planned Lifeform: Lerk" — in the same style as the scoreboard's badge and skill tooltips.
 
-The icons only appear before a round starts, and disappear the moment it begins.
+By default the icons only appear before a round starts, and disappear the moment it begins. Server owners can extend that — see [b]DisplayMode[/b] below.
 
 [h1]Greyed out vs. lit up[/h1]
 
@@ -43,6 +43,20 @@ So a grey Onos means "this player went Onos last round and has not said what the
 [*] [b]Spectators[/b] — see all picks, cannot declare.
 [*] [b]Marines[/b] — see nothing. Picks are filtered on the server, so the data never reaches a marine's machine at all rather than being sent and merely hidden.
 [/list]
+
+[h1]Server setting: DisplayMode[/h1]
+
+By default the icons are pre-round only. Server owners can change how long they stay up in [i]config://shine/plugins/LifeformPicker.json[/i], which is created with defaults on first load:
+
+[list]
+[*] [b]0 — Pregame Only[/b] (default). Icons show before the round and vanish the moment it starts.
+[*] [b]1 — Until First Lifeform[/b]. Icons carry into the round, and a player's icon disappears once they evolve past Skulk. It does not come back if they die back down to a Skulk — it resets when the round ends.
+[*] [b]2 — Full Game[/b]. Icons stay up all round and picks can be changed at any time. Once a player evolves past Skulk their icon shows [i]what they actually became[/i], greyed out — which is not necessarily what they picked, since calling a Fade and getting one are different things. Hovering it says "Evolved: Fade" rather than "Planned Lifeform: Fade".
+[/list]
+
+In modes 1 and 2 a pick confirmed before the round stays cream into the round, rather than greying out the moment it starts — the plan is still worth reading while the round is young. Everything unconfirms when the round ends, in every mode.
+
+Changes apply on map change or [i]sh_reloadplugin lifeformpicker[/i].
 
 [h1]Requirements[/h1]
 

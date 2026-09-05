@@ -18,20 +18,20 @@ typing it into chat.
 - Your pick **survives round transitions**. It never gets forgotten, but a round ending un-confirms
   it: the icon turns grey (the same shape, still your last choice) until you reconfirm it — click
   your icon again, whether to pick the same lifeform or a different one.
-- Icons disappear once the round starts, and reappear grey next pre-round.
+- By default icons disappear once the round starts, and reappear grey next pre-round. A server
+  owner can change that with **`DisplayMode`** — see below — to keep them up until each player
+  evolves, or for the whole round.
 - Hovering **any** icon shows a tooltip — "Planned Lifeform: Lerk" — the same style NS2 uses for
   the comm badge, playtester badge, and skill icon on the scoreboard.
 
 ## When the icons appear
 
-Both conditions must hold, or the scoreboard looks completely untouched:
+**You must be on the alien team, or spectating.** In the ready room or on marines you see nothing
+— not even other aliens' icons. This is stricter than Hatta's *Lifeform Selector*, which only hid
+icons from marines and so showed them to ready-room players too.
 
-1. **You are on the alien team, or spectating.** In the ready room or on marines you see nothing —
-   not even other aliens' icons.
-2. **The round has not started.** Game state is `NotStarted`, `WarmUp`, `PreGame` or `Countdown`.
-
-This is stricter than Hatta's *Lifeform Selector*, which only hid icons from marines and so showed
-them to ready-room players too.
+Beyond that, how long they stay up is the server's `DisplayMode` setting — see
+[Server setting](#server-setting-displaymode) below. By default they are pre-round only.
 
 If nothing appears and you expected it to, run this in the **client** console:
 
@@ -39,9 +39,44 @@ If nothing appears and you expected it to, run this in the **client** console:
 lifeformpicker_status
 ```
 
-It reports whether the scoreboard hooks installed, your team, the game state, whether icons
-*should* be showing, and how many picks the client has received — split into confirmed (cream)
-and grey (remembered but not yet reconfirmed this round).
+It reports whether the scoreboard hooks installed, the display mode in force, your team, the game
+state, whether you can declare right now, and how many picks the client knows about — split into
+confirmed, and how many have evolved this round.
+
+## Server setting: DisplayMode
+
+The one setting a server owner can change. It lives in
+`config://shine/plugins/LifeformPicker.json`, created with defaults on first load:
+
+```json
+{
+    "DisplayMode": 0
+}
+```
+
+| Mode | Name | Behaviour |
+|---|---|---|
+| **0** | Pregame Only *(default)* | Icons show before the round and vanish the moment it starts. |
+| **1** | Until First Lifeform | Icons carry into the round, and disappear for a player once they evolve past Skulk. |
+| **2** | Full Game | Icons stay all round, picks can be changed at any time, and an evolved player's icon shows what they actually became. |
+
+**Mode 1** hides an icon from the moment that player evolves into a Gorge, Lerk, Fade or Onos. It
+is a latch, not a live reading — dying back down to a Skulk does **not** bring it back. Everything
+resets when the round ends.
+
+**Mode 2** is the only mode where picks can be changed mid-round. Once a player has evolved past
+Skulk, their icon switches to showing **what they actually became**, greyed out — which is not
+necessarily what they picked, since calling a Fade and getting one are different things. If they
+then die back to a Skulk the icon keeps showing the last lifeform they actually reached, still
+grey, until the round ends. Hovering such an icon says "Evolved: Fade" rather than "Planned
+Lifeform: Fade".
+
+In modes 1 and 2 a pick confirmed before the round **stays cream into the round** rather than
+greying out at the start — the plan is still worth reading while the round is young. Everything
+unconfirms when the round ends, in every mode.
+
+Changes take effect on map change or `sh_reloadplugin lifeformpicker`; already-connected clients
+are told the new mode immediately on reload.
 
 ## Who sees what
 

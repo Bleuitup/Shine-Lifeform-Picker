@@ -1,13 +1,17 @@
 -- Shine Lifeform Picker
 -- lua/shine/extensions/lifeformpicker/client.lua
 --
--- Draws a lifeform icon on each alien scoreboard row during the pre-round, and lets you click
--- your own icon to declare what you intend to play.
+-- Draws a lifeform icon on each alien scoreboard row, and lets you click your own icon to declare
+-- what you intend to play.
 --
 -- A pick is sticky across round transitions - see server.lua - so this file distinguishes the
 -- lifeform *value* (which persists) from whether it is *confirmed* for the round in progress
 -- (which does not): the icon always shows the last value chosen, tinted grey until it has been
 -- confirmed and cream once it has.
+--
+-- How long the icons stay up is the server's DisplayMode setting, replicated here. In FullGame it
+-- adds a third thing an icon can be showing: what a player has actually evolved into, which is
+-- not necessarily what they picked. That is always grey, because it is not a statement of intent.
 --
 -- The scoreboard is reached with Shine.Hook.SetupClassHook rather than a ModLoader file hook.
 -- That matters for compatibility: mods such as Shimizu Scoreboard claim lua/GUIScoreboard.lua in
@@ -44,11 +48,10 @@ local kIconGap = 4
 -- ui/alien_hivestatus_commicons.dds, whose opaque pixels are baked at RGB 255,225,187. Sampling
 -- it and reproducing the value here gets the same look from white source art.
 --
--- Two tints signal confirmed intent versus a value that is only remembered from before. Grey is
--- the same "not yet meaningful" tone Enhanced Scoreboard / Shimizu Scoreboard use for their own
--- inactive icons (kEalInactiveColor, RGB 96,96,96); confirming switches the icon to the cream
--- above. A pick that survived a round transition is grey with the same shape it had before -
--- only cream, not the icon itself, is what confirming restores.
+-- Cream means "confirmed for this round". Grey covers everything that is not a confirmed plan:
+-- a pick nobody has reconfirmed since the last round, and - in FullGame - a lifeform the player
+-- has actually evolved into, which is a fact rather than an intention. Grey is the same "not yet
+-- meaningful" tone Enhanced Scoreboard / Shimizu Scoreboard use for their own inactive icons.
 local kIconColourUnconfirmed = Color( 96 / 255, 96 / 255, 96 / 255, 1 )
 local kIconColourConfirmed = Color( 255 / 255, 225 / 255, 187 / 255, 1 )
 
@@ -62,11 +65,13 @@ local kPreRoundStates = {
 	[ kGameState.Countdown ] = true
 }
 
--- [ steamId string ] = { lifeform = index, confirmed = boolean }, as replicated by the server.
--- A player with no entry has never declared at all, which the lookups below distinguish from a
--- present-but-unconfirmed entry: both render grey, but only the former falls back to the default
--- lifeform rather than showing a remembered one.
+-- [ steamId string ] = { lifeform = index, confirmed = boolean, evolved = index or nil }, as
+-- replicated by the server. A player with no entry has never declared and has not evolved.
 local Selections = {}
+
+-- Defaults to the most conservative mode until the server says otherwise, so a client that has
+-- not been told yet shows the least rather than the most.
+local DisplayMode = Plugin.kDisplayMode.PregameOnly
 
 -- Our own private GUIHoverTooltip instance, plus the state needed to avoid redundant work on it.
 -- Created lazily by GetTooltip() below; destroyed in Cleanup.
@@ -86,20 +91,48 @@ local function IsLocalViewer()
 end
 
 -- GetSteamIdForClientIndex returns nil until that player's PlayerInfoEntity has replicated, so
--- the tostring() here can legitimately produce "nil". That simply misses the table and falls
--- back to the Skulk default, which is the correct thing to show anyway.
-local function GetLifeformFor( ClientIndex )
-	local Entry = Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ]
-	return Entry and Entry.lifeform or Plugin.kDefaultLifeform
+-- the tostring() here can legitimately produce "nil". That simply misses the table, which reads
+-- as "has not declared and has not evolved" - the correct thing to show anyway.
+local function GetEntryFor( ClientIndex )
+	return Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ]
 end
 
--- Whether the current value showing for this player has actually been confirmed for the round in
--- progress, as opposed to only being remembered from a previous one. Drives the grey/cream tint;
--- GetLifeformFor deliberately does not care about this distinction, since the texture shown is
--- the same lifeform either way.
-local function IsConfirmed( ClientIndex )
-	local Entry = Selections[ tostring( GetSteamIdForClientIndex( ClientIndex ) ) ]
-	return Entry ~= nil and Entry.confirmed == true
+-- Whether this row's icon should be on screen at all, given the mode. The viewer and team checks
+-- are handled by the caller; this is only about *when* in the match icons are shown.
+local function ShouldShowRow( Entry, PreRound )
+	if DisplayMode == Plugin.kDisplayMode.FullGame then
+		return true
+	end
+
+	if DisplayMode == Plugin.kDisplayMode.UntilFirstLifeform then
+		-- Hidden from the moment they evolve. The server never clears `evolved` until the round
+		-- ends, so this stays hidden even if they die back down to a Skulk - a latch, not a
+		-- live reading of what they currently are.
+		return Entry == nil or Entry.evolved == nil
+	end
+
+	return PreRound
+end
+
+-- What this row's icon should draw: which lifeform, and whether it is a confirmed intention
+-- (cream) or anything else (grey). Returns the index, the colour flag, and whether what is being
+-- shown is an actual evolution rather than a plan - which the tooltip needs to word itself.
+local function ResolveIcon( Entry )
+	if DisplayMode == Plugin.kDisplayMode.FullGame and Entry and Entry.evolved then
+		-- Reality outranks intention once there is a reality to show. Always grey: this is what
+		-- they became, which may well not be what they picked.
+		return Entry.evolved, false, true
+	end
+
+	local Lifeform = Entry and Entry.lifeform or Plugin.kDefaultLifeform
+	return Lifeform, Entry ~= nil and Entry.confirmed == true, false
+end
+
+-- Picks only mean something while they still describe something that has not happened yet, so
+-- outside FullGame the menu is pre-round only. The server enforces the same rule; this keeps the
+-- client from offering a menu whose result would be thrown away.
+local function CanDeclareNow()
+	return DisplayMode == Plugin.kDisplayMode.FullGame or IsPreRound()
 end
 
 -- A GUIHoverTooltip of our own, deliberately NOT vanilla's shared Scoreboard.badgeNameTooltip.
@@ -143,7 +176,7 @@ local function EnsureIcon( PlayerItem )
 	-- frame from a read of it.
 	Icon:SetAnchor( GUIItem.Right, GUIItem.Center )
 	Icon:SetTexture( kAtlas )
-	-- No SetColor here: confirmed-vs-not can change every frame (a pick lands, a round resets),
+	-- No SetColor here: confirmed-vs-not can change every frame (a pick lands, a round ends),
 	-- so the colour is set on every render pass below instead of once at creation.
 	Icon:SetStencilFunc( GUIItem.NotEqual )
 	Icon:SetIsVisible( false )
@@ -175,19 +208,20 @@ end )
 function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 	if not Scoreboard.teams then return end
 
-	local Show = IsPreRound() and IsLocalViewer()
+	local Viewer = IsLocalViewer()
+	local PreRound = IsPreRound()
 	local Scale = GUIScoreboard.kScalingFactor
 
-	-- Hovering an icon shows its lifeform in a GUIHoverTooltip of our own (see GetTooltip), styled
-	-- exactly like the comm badge / playtester badge / skill icon tooltips because it is the same
-	-- widget class - just not the same instance vanilla drives.
-	local CanShowTooltip = Show and MouseTracker_GetIsVisible()
+	-- Hovering an icon names what it is showing, in a GUIHoverTooltip of our own (see GetTooltip),
+	-- styled exactly like the comm badge / playtester badge / skill icon tooltips because it is
+	-- the same widget class - just not the same instance vanilla drives.
+	local CanShowTooltip = Viewer and MouseTracker_GetIsVisible()
 		and not Scoreboard.hoverMenu.background:GetIsVisible() and not MainMenu_GetIsOpened()
 	local MouseX, MouseY
 	if CanShowTooltip then
 		MouseX, MouseY = Client.GetCursorPosScreen()
 	end
-	local HoveredIndex = nil
+	local HoveredIndex, HoveredIsActual = nil, false
 
 	for i = 1, #Scoreboard.teams do
 		local Team = Scoreboard.teams[ i ]
@@ -204,14 +238,15 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 			local IsCommander = PlayerItem.ClientIndex
 				and Scoreboard_GetPlayerData( PlayerItem.ClientIndex, "IsCommander" ) == true
 
+			local Entry = GetEntryFor( PlayerItem.ClientIndex )
+
 			-- Every row is touched on every pass, including marine and ready-room rows. Player
 			-- items are pooled and recycled between teams, so a row that used to belong to an
 			-- alien can reappear on the marine list; setting visibility unconditionally here is
 			-- what stops it carrying its old icon across, and removes any need to also hook
 			-- ResizePlayerList.
-			if Show and IsAlienTeam and not IsCommander then
-				local Index = GetLifeformFor( PlayerItem.ClientIndex )
-				local Confirmed = IsConfirmed( PlayerItem.ClientIndex )
+			if Viewer and IsAlienTeam and not IsCommander and ShouldShowRow( Entry, PreRound ) then
+				local Index, Confirmed, IsActual = ResolveIcon( Entry )
 
 				-- kIconGap here is purely local to Status now that the icon is parented to it -
 				-- no need to read Status's own position, since the anchor already places the
@@ -226,6 +261,7 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 				if CanShowTooltip and HoveredIndex == nil
 				and GUIItemContainsPoint( Icon, MouseX, MouseY ) then
 					HoveredIndex = Index
+					HoveredIsActual = IsActual
 				end
 			else
 				Icon:SetIsVisible( false )
@@ -234,7 +270,10 @@ function Plugin:OnLifeformPickerScoreboardUpdate( Scoreboard )
 	end
 
 	if HoveredIndex ~= nil then
-		local Text = string.format( "Planned Lifeform: %s", Plugin.kLifeforms[ HoveredIndex + 1 ] )
+		-- Wording has to follow what is actually being shown: in FullGame an icon can be a
+		-- lifeform someone has already evolved into, which is the opposite of a plan.
+		local Text = string.format( HoveredIsActual and "Evolved: %s" or "Planned Lifeform: %s",
+			Plugin.kLifeforms[ HoveredIndex + 1 ] )
 		local ThisTooltip = GetTooltip()
 
 		-- SetText re-runs word wrapping and resizes the background, so only call it when the text
@@ -306,7 +345,7 @@ function Plugin:OnLifeformPickerScoreboardKey( Scoreboard, Key, Down )
 	if Key ~= InputKey.MouseButton0 or not Down then return end
 	if not Scoreboard.visible or Scoreboard.hiddenOverride then return end
 	if not MouseTracker_GetIsVisible() or MainMenu_GetIsOpened() then return end
-	if not IsPreRound() then return end
+	if not CanDeclareNow() then return end
 
 	local Menu = Scoreboard.hoverMenu
 	if not Menu or Menu.background:GetIsVisible() then return end
@@ -345,7 +384,18 @@ function Plugin:OnLifeformPickerScoreboardKey( Scoreboard, Key, Down )
 end
 
 Client.HookNetworkMessage( "LifeformPicker_State", function( Message )
-	Selections[ Message.steamId ] = { lifeform = Message.lifeform, confirmed = Message.confirmed }
+	Selections[ Message.steamId ] = {
+		lifeform = Message.lifeform,
+		confirmed = Message.confirmed,
+		-- An integer field cannot carry "not set", so hasEvolved is what distinguishes a player
+		-- who has not evolved from one who evolved into a Skulk-indexed 0 (which cannot happen,
+		-- but relying on that would be fragile).
+		evolved = Message.hasEvolved and Message.evolved or nil
+	}
+end )
+
+Client.HookNetworkMessage( "LifeformPicker_Config", function( Message )
+	DisplayMode = Message.displayMode
 end )
 
 -- Icons are conditional, so "nothing is showing" has several possible causes that look identical
@@ -356,21 +406,25 @@ local function PrintStatus()
 	local GameInfo = GetGameInfoEntity()
 	local State = GameInfo and GameInfo:GetState()
 
-	local Total, ConfirmedCount = 0, 0
+	local ModeNames = { [ 0 ] = "pregame only", [ 1 ] = "until first lifeform", [ 2 ] = "full game" }
+
+	local Total, ConfirmedCount, EvolvedCount = 0, 0, 0
 	for _, Entry in pairs( Selections ) do
 		Total = Total + 1
 		if Entry.confirmed then ConfirmedCount = ConfirmedCount + 1 end
+		if Entry.evolved then EvolvedCount = EvolvedCount + 1 end
 	end
 
 	Print( "[LifeformPicker] hooks installed : %s", tostring( Plugin.HooksInstalled == true ) )
+	Print( "[LifeformPicker] display mode    : %s (%s)",
+		tostring( DisplayMode ), ModeNames[ DisplayMode ] or "unknown" )
 	Print( "[LifeformPicker] your team       : %s (need %s alien or %s spectator)",
 		tostring( Team ), tostring( kTeam2Index ), tostring( kSpectatorIndex ) )
 	Print( "[LifeformPicker] game state      : %s (pre-round: %s)",
 		tostring( State ), tostring( State ~= nil and kPreRoundStates[ State ] == true ) )
-	Print( "[LifeformPicker] icons should be : %s",
-		tostring( IsPreRound() and IsLocalViewer() ) )
-	Print( "[LifeformPicker] picks remembered: %d (%d confirmed, %d grey/unconfirmed)",
-		Total, ConfirmedCount, Total - ConfirmedCount )
+	Print( "[LifeformPicker] can declare now : %s", tostring( CanDeclareNow() ) )
+	Print( "[LifeformPicker] picks known     : %d (%d confirmed, %d evolved this round)",
+		Total, ConfirmedCount, EvolvedCount )
 end
 
 function Plugin:Initialise()
@@ -386,6 +440,7 @@ end
 
 function Plugin:Cleanup()
 	Selections = {}
+	DisplayMode = Plugin.kDisplayMode.PregameOnly
 
 	-- Ours to create, ours to destroy - unlike the shared singleton, nothing else will clean this
 	-- up if the plugin is disabled or reloaded.
